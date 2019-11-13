@@ -110,9 +110,11 @@ numFaces :: PlanarGraph -> Int
 numFaces = length . pgFaces
 
 
-
-
-
+-- Idea for doubling along a face:
+-- 1) Reflect PG. Simply take all the same data and reverse the links
+-- 2) Look at maximal index of og PG. Increase all vertices in the reflected PG
+-- by this amount.
+-- 3) Build new PG by fusing the face. This is definitely doable!
 
 
 -- Tetrahedron (for testing purposes)
