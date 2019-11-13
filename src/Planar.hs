@@ -26,11 +26,13 @@ import Data.Maybe
 
 data PlanarGraph = PG {
                         graph :: Graph,
-                        links :: [Link],
+                        links :: [Link Vertex],
                         bounding :: Bounding
                       } deriving Show
 
-newtype Link = Link { linkPair :: (Vertex, [Vertex])} deriving Show
+newtype Link a = Link { linkPair :: (a, [a])} deriving Show
+instance Functor Link where
+  fmap f (Link xp) = Link (f $ fst xp, map f (snd xp))
 type Bounding = Face 
 newtype Face = Face {fvertices :: [Vertex]} deriving (Show, Ord)
 
@@ -46,16 +48,16 @@ pgVertices = vertices . graph
 -- Functions for Link(s)
 
 -- | Gets the link of the vertex in the graph
-getLinkOf :: Vertex -> PlanarGraph -> Link
+getLinkOf :: Vertex -> PlanarGraph -> Link Vertex
 getLinkOf v pg = Link (v, fromMaybe [] (lookup v (map linkPair $ links pg)))
 
 -- | Vertices in Link
-linkVertices :: Link -> [Vertex]
+linkVertices :: Link Vertex -> [Vertex]
 linkVertices (Link (v, vs)) = vs
 
 -- | Move right in the link:
 moveRight :: Vertex -> -- ^ Current vertex in link
-             Link   -> -- ^ Link we're working in
+             Link Vertex   -> -- ^ Link we're working in
              Vertex    -- ^ Vertex to the right
 moveRight e l = linkVertices l !! rIndex
   where eIndex = fromJust $ elemIndex e (linkVertices l)
@@ -63,7 +65,7 @@ moveRight e l = linkVertices l !! rIndex
 
 -- | Move left in the link:
 moveLeft ::  Vertex -> -- ^ Current vertex in link
-             Link   -> -- ^ Link we're working in
+             Link Vertex   -> -- ^ Link we're working in
              Vertex    -- ^ Vertex to the left
 moveLeft e l  = linkVertices l !! rIndex
   where eIndex = fromJust $ elemIndex e (linkVertices l)
@@ -129,24 +131,21 @@ shiftGraph n g = array (n + fst indices, n + snd indices)
   where indices = bounds g
         adj = assocs g
 
-shiftLink :: Int -> Link -> Link
-shiftLink n (Link lk) = Link (shift n lk)
-
-shiftLinks :: Int -> [Link] -> [Link]
-shiftLinks n = map (shiftLink n)
+shiftLinks :: Int -> [Link Vertex] -> [Link Vertex]
+shiftLinks n = map ((n+) <$>)
 
 shiftFace :: Int -> Face -> Face
 shiftFace n (Face vs) = Face (map (n+) vs)
 
+revLink :: Link Vertex -> Link Vertex
+revLink (Link (v,vs)) = Link (v, reverse vs)
+
 reflectPG :: PlanarGraph -> PlanarGraph
 reflectPG pg = PG (graph pg)
-                  (reverseLinks $ links pg)
+                  (map revLink (links pg))
                   (bounding pg)
 
 
-newtype L a = L { lPair :: (a, [a])} deriving Show
-instance Functor L where
-  fmap f (L xp) = L (f $ fst xp, map f (snd xp))
 
 
 -- Tetrahedron (for testing purposes)
