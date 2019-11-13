@@ -33,6 +33,9 @@ newtype Link = Link { linkPair :: (Vertex, [Vertex])} deriving Show
 type Bounding = Face 
 
 
+-- Extending Data.Graph functionality
+pgVertices :: PlanarGraph -> [Vertex]
+pgVertices = vertices . graph
 
 -- Functions for Link(s)
 
@@ -62,7 +65,11 @@ moveLeft e l  = linkVertices l !! rIndex
 
 
 -- FACE stuff
-newtype Face = Face {fvertices :: [Vertex]} deriving Show
+newtype Face = Face {fvertices :: [Vertex]} deriving (Show, Ord)
+
+instance Eq Face where
+  f1 == f2 = sort (fvertices f1) == sort (fvertices f2)
+
 
 -- instance Functor Face where
   -- fmap f (Face x) = Face (map f x)
@@ -95,6 +102,18 @@ faceLeftOf v1 v2 pg = faceLeftOf' v1 v2 pg []
 findFacesAtV :: Vertex -> PlanarGraph -> [Face]
 findFacesAtV v pg = [ faceLeftOf v v2 pg | v2<-linkVertices $ getLinkOf v pg ]
 
+pgFaces :: PlanarGraph -> [Face]
+pgFaces pg = nub faces
+  where faces = concat [findFacesAtV v pg | v<-pgVertices pg ]
+
+numFaces :: PlanarGraph -> Int
+numFaces = length . pgFaces
+
+
+
+
+
+
 
 -- Tetrahedron (for testing purposes)
 -- Note that the fact that Graph is directed has no effect whatsoever on what
@@ -114,5 +133,26 @@ tetrahedron = PG gr
                               Link (3, [1,2,4]),
                               Link (4, [1,3,2])]
                        bdd = Face [2,3,4]
+
+cube :: PlanarGraph
+cube= PG gr
+         lks
+         bdd
+         where gr = buildG (1, 8) [ (1,2), (1,3), (1,5), 
+                                    (2,4), (2,6), 
+                                    (3,4), (3,7),
+                                    (4,8), 
+                                    (5,6), (5,7),
+                                    (6,8), (7,8)]
+               lks = [Link (1, [2,3,5]),
+                      Link (2, [1,6,4]),
+                      Link (3, [1,4,7]),
+                      Link (4, [2,8,3]),
+                      Link (5, [1,7,6]),
+                      Link (6, [2,5,8]),
+                      Link (7, [3,8,5]),
+                      Link (8, [4,6,7])]
+               bdd = Face [1,2,3,4]
+
 
 
