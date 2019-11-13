@@ -21,6 +21,9 @@ description:         Please see the README on GitHub at <https://github.com/ckat
 
 dependencies:
 - base >= 4.7 && < 5
+- containers
+- hspec
+- QuickCheck
 
 library:
   source-dirs: src

@@ -30,15 +30,12 @@ resolver: lts-14.14
 #   - wai
 packages:
 - .
-# Dependency packages to be pulled from upstream that are not in the resolver.
-# These entries can reference officially published versions as well as
-# forks / in-progress versions pinned to a git hash. For example:
-#
-# extra-deps:
-# - acme-missiles-0.3
-# - git: https://github.com/commercialhaskell/stack.git
-#   commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a
-#
+extra-deps:
+ # - data.clist-0.1.2.3
+ # - acme-missiles-0.3
+ # - git: https://github.com/commercialhaskell/stack.git
+ #   commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a
+
 # extra-deps: []
 
 # Override default flag values for local packages and extra-deps
@@ -64,3 +61,9 @@ packages:
 #
 # Allow a newer minor version of GHC than the snapshot specifies
 # compiler-check: newer-minor
+#
+
+  # # This is enabling Nix packages.
+  # nix:
+  #   enable: true
+  #   packages: [glpk, pcre]
