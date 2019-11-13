@@ -12,23 +12,23 @@ main = hspec $ do
       $ do
           let v = 2
           let l = Link (1, [2,3,4])
-          moveRight v l `shouldBe` (3::Int)
+          moveRight v l `shouldBe` (3::Vertex)
     it "If v = 4 and l = Link (1, [2,3,4]), should output 2" 
       $ do
           let v = 4
           let l = Link (1, [2,3,4])
-          moveRight v l `shouldBe` (2::Int)
+          moveRight v l `shouldBe` (2::Vertex)
   describe "Planar.moveLeft" $ do
     it "If v = 2 and l = Link (1, [2,3,4]), should output 4" 
       $ do
           let v = 2
           let l = Link (1, [2,3,4])
-          moveLeft v l `shouldBe` (4::Int)
+          moveLeft v l `shouldBe` (4::Vertex)
     it "If v = 4 and l = Link (1, [2,3,4]), should output 3" 
       $ do
           let v = 4
           let l = Link (1, [2,3,4])
-          moveLeft v l `shouldBe` (3::Int)
+          moveLeft v l `shouldBe` (3::Vertex)
 
 
   -- describe "Lib.answer1" $ do
