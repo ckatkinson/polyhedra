@@ -6,6 +6,7 @@ module Planar
     ) where
 
 import Control.Applicative
+import Data.Array
 import Data.Graph
 import Data.List
 import Data.Maybe
@@ -31,6 +32,11 @@ data PlanarGraph = PG {
 
 newtype Link = Link { linkPair :: (Vertex, [Vertex])} deriving Show
 type Bounding = Face 
+newtype Face = Face {fvertices :: [Vertex]} deriving (Show, Ord)
+
+instance Eq Face where
+  f1 == f2 = sort (fvertices f1) == sort (fvertices f2)
+
 
 
 -- Extending Data.Graph functionality
@@ -65,18 +71,6 @@ moveLeft e l  = linkVertices l !! rIndex
 
 
 -- FACE stuff
-newtype Face = Face {fvertices :: [Vertex]} deriving (Show, Ord)
-
-instance Eq Face where
-  f1 == f2 = sort (fvertices f1) == sort (fvertices f2)
-
-
--- instance Functor Face where
-  -- fmap f (Face x) = Face (map f x)
--- Still not quite there.
--- instance Applicative Face where
-  -- pure x = Face x
-  -- (<*>) = liftA2
 
 
 -- Get the face containing v1 and directed edge v1->v2 to the left of v1->v2
@@ -115,6 +109,44 @@ numFaces = length . pgFaces
 -- 2) Look at maximal index of og PG. Increase all vertices in the reflected PG
 -- by this amount.
 -- 3) Build new PG by fusing the face. This is definitely doable!
+--
+shiftIndicesPG :: Int -> PlanarGraph -> PlanarGraph
+shiftIndicesPG n pg = PG (shiftGraph n (graph pg)) 
+                         (shiftLinks n (links pg)) 
+                         (shiftFace n (bounding pg))
+-- shiftIndicesPG n (PG gr li bo) = PG (shiftGraph n gr)
+                                    -- (shiftLinks n li)
+                                    -- (shiftFace n bo)
+
+shift :: Int -> (Int, [Int]) -> (Int, [Int])
+shift n p = (n + fst p, map (n+) (snd p))
+
+shiftGraph :: Int -> Graph -> Graph
+shiftGraph n g = array (n + fst indices, n + snd indices)
+                        (map (\a -> (n + fst a, 
+                                    map (n+) (snd a))) 
+                                    adj)
+  where indices = bounds g
+        adj = assocs g
+
+shiftLink :: Int -> Link -> Link
+shiftLink n (Link lk) = Link (shift n lk)
+
+shiftLinks :: Int -> [Link] -> [Link]
+shiftLinks n = map (shiftLink n)
+
+shiftFace :: Int -> Face -> Face
+shiftFace n (Face vs) = Face (map (n+) vs)
+
+reflectPG :: PlanarGraph -> PlanarGraph
+reflectPG pg = PG (graph pg)
+                  (reverseLinks $ links pg)
+                  (bounding pg)
+
+
+newtype L a = L { lPair :: (a, [a])} deriving Show
+instance Functor L where
+  fmap f (L xp) = L (f $ fst xp, map f (snd xp))
 
 
 -- Tetrahedron (for testing purposes)
