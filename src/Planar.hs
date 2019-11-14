@@ -1,3 +1,6 @@
+{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS -Wno-unused-top-binds #-}
+
 module Planar
     ( moveRight
     , moveLeft
@@ -5,7 +8,6 @@ module Planar
     , Vertex
     ) where
 
-import Control.Applicative
 import Data.Array
 import Data.Graph
 import Data.List
@@ -42,8 +44,10 @@ instance Eq Face where
 
 
 -- Extending Data.Graph functionality
-pgVertices :: PlanarGraph -> [Vertex]
-pgVertices = vertices . graph
+-- | Gives the vertex list of the PG
+-- pgVertices :: PlanarGraph -> [Vertex]
+-- pgVertices = vertices . graph
+
 
 -- Functions for Link(s)
 
@@ -53,7 +57,7 @@ getLinkOf v pg = Link (v, fromMaybe [] (lookup v (map linkPair $ links pg)))
 
 -- | Vertices in Link
 linkVertices :: Link Vertex -> [Vertex]
-linkVertices (Link (v, vs)) = vs
+linkVertices (Link (_, vs)) = vs
 
 -- | Move right in the link:
 moveRight :: Vertex -> -- ^ Current vertex in link
@@ -77,6 +81,8 @@ moveLeft e l  = linkVertices l !! rIndex
 
 -- Get the face containing v1 and directed edge v1->v2 to the left of v1->v2
 -- TODO: Make a test case for this! I'm on a roll, so don't feel like it now.
+--
+-- | Returns the face to the left of the direct edge v1->v2
 faceLeftOf :: Vertex ->       -- ^ v1
               Vertex ->       -- ^ v2
               PlanarGraph ->  -- ^ pg
@@ -85,12 +91,12 @@ faceLeftOf v1 v2 pg = faceLeftOf' v1 v2 pg []
   where linkv1   = getLinkOf v1 pg
         lastVert = moveLeft v2 linkv1
         faceLeftOf' :: Vertex -> Vertex -> PlanarGraph -> [Vertex] -> Face
-        faceLeftOf' v1 v2 pg acc 
+        faceLeftOf' v1' v2' pg' acc 
           | lastVert `elem` acc = Face acc
-          | otherwise           = faceLeftOf' v2
+          | otherwise           = faceLeftOf' v2'
                                               nextVert 
-                                              pg 
-                                              (v1:acc)
+                                              pg'
+                                              (v1':acc)
           where linkv2 = getLinkOf v2 pg
                 nextVert = moveRight v1 linkv2 -- Careful here!
 
@@ -98,10 +104,12 @@ faceLeftOf v1 v2 pg = faceLeftOf' v1 v2 pg []
 findFacesAtV :: Vertex -> PlanarGraph -> [Face]
 findFacesAtV v pg = [ faceLeftOf v v2 pg | v2<-linkVertices $ getLinkOf v pg ]
 
+-- | Returns a list of all faces of the PG
 pgFaces :: PlanarGraph -> [Face]
 pgFaces pg = nub faces
-  where faces = concat [findFacesAtV v pg | v<-pgVertices pg ]
+  where faces = concat [findFacesAtV v pg | v<-(vertices $ graph pg) ]
 
+-- | Returns the number of faces of the PG
 numFaces :: PlanarGraph -> Int
 numFaces = length . pgFaces
 
@@ -112,23 +120,18 @@ numFaces = length . pgFaces
 -- by this amount.
 -- 3) Build new PG by fusing the face. This is definitely doable!
 --
+-- | Shift all vertex indices in the PG by n. Used for copying a PG.
 shiftIndicesPG :: Int -> PlanarGraph -> PlanarGraph
 shiftIndicesPG n pg = PG (shiftGraph n (graph pg)) 
                          (shiftLinks n (links pg)) 
                          (shiftFace n (bounding pg))
--- shiftIndicesPG n (PG gr li bo) = PG (shiftGraph n gr)
-                                    -- (shiftLinks n li)
-                                    -- (shiftFace n bo)
-
-shift :: Int -> (Int, [Int]) -> (Int, [Int])
-shift n p = (n + fst p, map (n+) (snd p))
 
 shiftGraph :: Int -> Graph -> Graph
-shiftGraph n g = array (n + fst indices, n + snd indices)
+shiftGraph n g = array (n + fst bds, n + snd bds)
                         (map (\a -> (n + fst a, 
                                     map (n+) (snd a))) 
                                     adj)
-  where indices = bounds g
+  where bds = bounds g
         adj = assocs g
 
 shiftLinks :: Int -> [Link Vertex] -> [Link Vertex]
@@ -137,14 +140,28 @@ shiftLinks n = map ((n+) <$>)
 shiftFace :: Int -> Face -> Face
 shiftFace n (Face vs) = Face (map (n+) vs)
 
+
+-- | Flips the link for reflecting PG.
 revLink :: Link Vertex -> Link Vertex
 revLink (Link (v,vs)) = Link (v, reverse vs)
 
+-- | Returns mirror image of PG.
 reflectPG :: PlanarGraph -> PlanarGraph
 reflectPG pg = PG (graph pg)
                   (map revLink (links pg))
                   (bounding pg)
 
+-- This is the tricky part. Need to think.
+fusePG :: PlanarGraph -> PlanarGraph -> Face -> Face -> PlanarGraph
+fusePG = undefined
+
+doublePG :: PlanarGraph -> Face -> PlanarGraph
+doublePG pg f = fusePG pg 
+                       (shiftIndicesPG (maxIndex pg) (reflectPG pg)) 
+                       f
+                       (shiftFace (maxIndex pg) f)
+                       where maxIndex :: PlanarGraph -> Int
+                             maxIndex = snd . bounds . graph 
 
 
 
