@@ -29,7 +29,9 @@ newtype PlanarGraph = PG {
                         links :: [Link Vertex]
                       } deriving Show
 
-newtype Link a = Link { linkPair :: (a, [a])} deriving Show
+-- TODO: This Eq is too restrictive. Need to allow for cyclic reorderings to be
+-- equal.
+newtype Link a = Link { linkPair :: (a, [a])} deriving (Show, Eq)
 instance Functor Link where
   fmap f (Link xp) = Link (f $ fst xp, map f (snd xp))
 
@@ -145,21 +147,57 @@ reflectPG :: PlanarGraph -> PlanarGraph
 reflectPG pg = PG (map revLink (links pg))
 
 
+maxIndex :: PlanarGraph -> Int
+maxIndex = maximum . pgVertices 
+
+filterFace :: Face -> Link Vertex -> Bool
+filterFace face link = linkVertex link `notElem` fvertices face
+
+filterVertex :: Vertex -> Link Vertex -> Bool
+filterVertex v link = linkVertex link /= v
+
+linkOfFace :: Face -> PlanarGraph -> [Link Vertex]
+linkOfFace face pg = [ l | l<-links pg,
+                           linkVertex l `notElem` fvertices face,
+                           any (\v -> v `elem` linkVertices l) (fvertices face) ] 
+
 doublePG :: PlanarGraph -> Face -> PlanarGraph
-doublePG pg f = PG newLinkList
-  where reflpg = shiftIndicesPG (maxIndex pg) (reflectPG pg)
-        maxIndex :: PlanarGraph -> Int
-        maxIndex = maximum . pgVertices 
-        wof  = filter (filterFace f) (links pg)
-        rwof = filter (filterFace f) (links reflpg)
-        filterFace face x = linkVertex x `notElem` fvertices face
-        newLinkList = wof ++ rwof ++ addedLinks ++ raddedLinks
-        addedLinks = [ Link (a, fixLink (maxIndex pg) a f pg) | vf<-fvertices f,
-                                                    a<-filter (\x -> x `notElem` fvertices f) 
-                                                              (linkVertices (getLinkOf vf pg)) ]
-        raddedLinks = [ Link (a, fixLink ((-1) * maxIndex reflpg) a f reflpg) | vf<-fvertices f,
-                                                    a<-filter (\x -> x `notElem` fvertices f) 
-                                                              (linkVertices (getLinkOf vf reflpg)) ]
+doublePG pg face = PG (nub $ lwofandnbrs ++ rlwofandnbrs ++ addedLinks ++ raddedLinks)
+  where reflectedPg = shiftIndicesPG (maxIndex pg) (reflectPG pg) -- reflect pg
+        linksWoFace = filter (filterFace face) (links pg) -- remove links with Vertex in face
+        rlinksWoFace = filter (filterFace (shiftFace (maxIndex pg) face)) (links reflectedPg) -- as above, but for reflected
+        -- Remove all links centered at a vertex in the link of a vertex of face
+        lwofandnbrs = filter (\l -> l `notElem` linkOfFace face pg) linksWoFace
+        -- same, but for reflected
+        rlwofandnbrs = filter (\l -> l `notElem` linkOfFace (shiftFace (maxIndex pg) face) reflectedPg) rlinksWoFace
+        addedLinks = [ Link (a, fixLink (maxIndex pg) a face pg) | vf<-fvertices face,
+                                                                   a<-filter (\x -> x `notElem` fvertices face)
+                                                                   (linkVertices (getLinkOf vf pg)) ]
+        raddedLinks = [ Link (a, fixLink ((-1) * maxIndex reflectedPg) a face reflectedPg) | vf<-fvertices (shiftFace (maxIndex pg) face),
+                                                    a<-filter (\x -> x `notElem` fvertices (shiftFace (maxIndex pg) face))
+                                                              (linkVertices (getLinkOf vf reflectedPg)) ]
+
+        
+        
+        
+
+
+
+
+-- -- This is such a clusterfuck
+-- doublePG' :: PlanarGraph -> Face -> PlanarGraph
+-- doublePG' pg f = PG newLinkList
+  -- where reflpg = shiftIndicesPG (maxIndex pg) (reflectPG pg)
+        -- wof  = filter (filterFace f) (links pg)
+        -- rwof = filter (filterFace f) (links reflpg)
+        -- filterFace face x = linkVertex x `notElem` fvertices face
+        -- newLinkList = wof ++ rwof ++ addedLinks ++ raddedLinks
+        -- addedLinks = [ Link (a, fixLink (maxIndex pg) a f pg) | vf<-fvertices f,
+                                                    -- a<-filter (\x -> x `notElem` fvertices f)
+                                                              -- (linkVertices (getLinkOf vf pg)) ]
+        -- raddedLinks = [ Link (a, fixLink ((-1) * maxIndex reflpg) a f reflpg) | vf<-fvertices f,
+                                                    -- a<-filter (\x -> x `notElem` fvertices f)
+                                                              -- (linkVertices (getLinkOf vf reflpg)) ]
 
 -- We're almost there Problem is that we didn't "fuse" the vertices
 
