@@ -77,6 +77,9 @@ moveLeft e l  = linkVertices l !! rIndex
 
 -- FACE stuff
 
+faceLength :: Face -> Int
+faceLength = length . fvertices
+
 
 -- Get the face containing v1 and directed edge v1->v2 to the left of v1->v2
 -- TODO: Make a test case for this! I'm on a roll, so don't feel like it now.
@@ -112,6 +115,9 @@ pgFaces pg = nub faces
 numFaces :: PlanarGraph -> Int
 numFaces = length . pgFaces
 
+--LOLWUT. Both pgFaces and numFaces give Exception: divide by zero when applied
+--to doubled tetrahedron..
+
 
 -- Idea for doubling along a face:
 -- 1) Reflect PG. Simply take all the same data and reverse the links
@@ -138,19 +144,31 @@ revLink (Link (v,vs)) = Link (v, reverse vs)
 reflectPG :: PlanarGraph -> PlanarGraph
 reflectPG pg = PG (map revLink (links pg))
 
--- This is the tricky part. Need to think.
-fusePG :: PlanarGraph -> PlanarGraph -> Face -> Face -> PlanarGraph
-fusePG = undefined
 
 doublePG :: PlanarGraph -> Face -> PlanarGraph
-doublePG pg f = fusePG pg 
-                       (shiftIndicesPG (maxIndex pg) (reflectPG pg)) 
-                       f
-                       (shiftFace (maxIndex pg) f)
-                       where maxIndex :: PlanarGraph -> Int
-                             maxIndex = maximum . pgVertices 
+doublePG pg f = PG newLinkList
+  where reflpg = shiftIndicesPG (maxIndex pg) (reflectPG pg)
+        maxIndex :: PlanarGraph -> Int
+        maxIndex = maximum . pgVertices 
+        wof  = filter (filterFace f) (links pg)
+        rwof = filter (filterFace f) (links reflpg)
+        filterFace face x = linkVertex x `notElem` fvertices face
+        newLinkList = wof ++ rwof ++ addedLinks ++ raddedLinks
+        addedLinks = [ Link (a, fixLink (maxIndex pg) a f pg) | vf<-fvertices f,
+                                                    a<-filter (\x -> x `notElem` fvertices f) 
+                                                              (linkVertices (getLinkOf vf pg)) ]
+        raddedLinks = [ Link (a, fixLink ((-1) * maxIndex reflpg) a f reflpg) | vf<-fvertices f,
+                                                    a<-filter (\x -> x `notElem` fvertices f) 
+                                                              (linkVertices (getLinkOf vf reflpg)) ]
 
+-- We're almost there Problem is that we didn't "fuse" the vertices
 
+fixLink :: Vertex -> Vertex -> Face -> PlanarGraph -> [Vertex]
+fixLink n v f pg = sub (linkVertices (getLinkOf v pg))
+  where sub [] = []
+        sub (x:xs)
+          | x `elem` fvertices f = (x + n) : sub xs 
+          | otherwise = x : sub xs
 
 -- Tetrahedron (for testing purposes)
 -- Note that the fact that Graph is directed has no effect whatsoever on what
