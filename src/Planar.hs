@@ -119,6 +119,9 @@ numFaces = length . pgFaces
 
 --LOLWUT. Both pgFaces and numFaces give Exception: divide by zero when applied
 --to doubled tetrahedron..
+--
+-- Ok, I'm on to it. There are Vertex in some of the links of dc that do not
+-- appear as vertices. Something is still wrong with the doubling.
 
 
 -- Idea for doubling along a face:
