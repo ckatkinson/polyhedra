@@ -9,6 +9,7 @@ module Planar
     ) where
 
 import Data.List
+import Data.List.Split (splitOneOf)
 import Data.Maybe
 
 -- Plan: I want to encode a planar embedding of a graph. The idea is to use the
@@ -59,6 +60,11 @@ linkVertex (Link (v, _)) = v
 -- | Vertices in Link
 linkVertices :: Link Vertex -> [Vertex]
 linkVertices (Link (_, vs)) = vs
+
+-- | degree of a vertex
+linkValence :: Link Vertex -> Int
+linkValence = length . linkVertices
+
 
 -- | Move right in the link:
 moveRight :: Vertex -> -- ^ Current vertex in link
@@ -164,45 +170,129 @@ linkOfFace face pg = [ l | l<-links pg,
                            linkVertex l `notElem` fvertices face,
                            any (\v -> v `elem` linkVertices l) (fvertices face) ] 
 
+-- This only makes sense for right-angled faces with all vertices degree 3
 doublePG :: PlanarGraph -> Face -> PlanarGraph
 doublePG pg face = PG (nub $ lwofandnbrs ++ rlwofandnbrs ++ addedLinks ++ raddedLinks)
   where reflectedPg = shiftIndicesPG (maxIndex pg) (reflectPG pg) -- reflect pg
+        reflFace = shiftFace (maxIndex pg) face
         linksWoFace = filter (filterFace face) (links pg) -- remove links with Vertex in face
-        rlinksWoFace = filter (filterFace (shiftFace (maxIndex pg) face)) (links reflectedPg) -- as above, but for reflected
+        rlinksWoFace = filter (filterFace reflFace) (links reflectedPg) -- as above, but for reflected
         -- Remove all links centered at a vertex in the link of a vertex of face
         lwofandnbrs = filter (\l -> l `notElem` linkOfFace face pg) linksWoFace
         -- same, but for reflected
-        rlwofandnbrs = filter (\l -> l `notElem` linkOfFace (shiftFace (maxIndex pg) face) reflectedPg) rlinksWoFace
-        addedLinks = [ Link (a, fixLink (maxIndex pg) a face pg) | vf<-fvertices face,
-                                                                   a<-filter (\x -> x `notElem` fvertices face)
-                                                                   (linkVertices (getLinkOf vf pg)) ]
-        raddedLinks = [ Link (a, fixLink ((-1) * maxIndex reflectedPg) a face reflectedPg) | vf<-fvertices (shiftFace (maxIndex pg) face),
-                                                    a<-filter (\x -> x `notElem` fvertices (shiftFace (maxIndex pg) face))
-                                                              (linkVertices (getLinkOf vf reflectedPg)) ]
+        rlwofandnbrs = filter (\l -> l `notElem` linkOfFace reflFace reflectedPg) rlinksWoFace
+        -- I'm really not sure that fixLink is doing the right thing
+        addedLinks = [ Link (a, fixLink (maxIndex pg) a face pg) | 
+                            vf<-fvertices face,
+                            a<-filter (\x -> x `notElem` fvertices face)
+                                      (linkVertices (getLinkOf vf pg)) ]
+        raddedLinks = [ Link (a, fixLink ((-1) * maxIndex pg) a reflFace reflectedPg) | 
+                             vf<-fvertices reflFace,
+                             a<-filter (\x -> x `notElem` fvertices reflFace)
+                                       (linkVertices (getLinkOf vf reflectedPg)) ]
 
-        
-        
-        
+        --                     /
+        --                    /
+        --    *--------------*---------------*
+        --                   |
+        --                   |
+        --                   |
+        --                   |
+        --    *--------------*---------------*
+        --    a              v              b
+        --
+        --    What I really want fixLink to do is not simply add to the index.
+        --    It should leave from a towards the face and pop out on the other
+        --    side. In the link of a, I want to replace v with b.
 
 
+-- | returns the image of v when reflected a face. This is only relevant when
+-- pg is a cubic graph. Which face is in fact irrelevant because when we do the
+-- reflection, the opposite vertex is always going to be the one shifted by
+-- maxIndex pg. `mod` (2*shift) makes it so that this works also for vertices in
+-- the reflected copy of pg.
+oppositeVertex :: Vertex -> PlanarGraph -> Vertex
+oppositeVertex v pg = let shift = maxIndex pg
+  in (v + shift) `mod` (2*shift)
 
 
--- -- This is such a clusterfuck
--- doublePG' :: PlanarGraph -> Face -> PlanarGraph
--- doublePG' pg f = PG newLinkList
-  -- where reflpg = shiftIndicesPG (maxIndex pg) (reflectPG pg)
-        -- wof  = filter (filterFace f) (links pg)
-        -- rwof = filter (filterFace f) (links reflpg)
-        -- filterFace face x = linkVertex x `notElem` fvertices face
-        -- newLinkList = wof ++ rwof ++ addedLinks ++ raddedLinks
-        -- addedLinks = [ Link (a, fixLink (maxIndex pg) a f pg) | vf<-fvertices f,
-                                                    -- a<-filter (\x -> x `notElem` fvertices f)
-                                                              -- (linkVertices (getLinkOf vf pg)) ]
-        -- raddedLinks = [ Link (a, fixLink ((-1) * maxIndex reflpg) a f reflpg) | vf<-fvertices f,
-                                                    -- a<-filter (\x -> x `notElem` fvertices f)
-                                                              -- (linkVertices (getLinkOf vf reflpg)) ]
+-- I'm writing this just with links in pg in mind. Have to think about how to
+-- extend to those in rpg.
+--
+-- Idea for above comment: It's symmetric, so how about just adding in the
+-- reflected links as we work through. This'll take care of vertex duplication
+-- too.
+-- TODO: This really deserves a full suite of tests. (Also, it's 24 lines ;) )
+updateLink :: Link Vertex -> Face -> PlanarGraph -> Maybe (Link Vertex)
+updateLink l f pg
+  | lVlf `elem` fVerts && length lVslf == 3 = Nothing   -- linkVertex l in f is trivalent (Nothing)
+  | lVlf `elem` fVerts && length lVslf > 3  = Just $ fuseLink l f pg -- linkVertex l in f is higher degree
+  | l `elem` linkF && faceValence == 4 = 
+      if lVlf `elem` pgVertices pg
+        then Just l
+        else Just (Link (linkVertex l, 
+                   substitute (`elem` rfVerts) 
+                              (`oppositeVertex` pg)
+                              lVslf))                  -- l in link of face f, meets f at degree-4 vertex
+  | l `elem` linkF && faceValence == 3 =            --  l in link of face f, meets f at degree-3 vertex
+      Just (Link (linkVertex l,
+            substitute (\v -> (v `elem` fVerts) ||
+                              (v `elem` rfVerts))
+                       (const $ oppositeVertex lVlf pg)
+                       lVslf))
+  | otherwise   = Just l                                -- l not in link of face f
+  where linkF = linkOfFace f pg
+        lVlf = linkVertex l
+        lVslf = linkVertices l
+        fVerts = fvertices f
+        rfVerts = map (`oppositeVertex` pg) fVerts
+        fv = head ( linkVertices l `intersect` fVerts)
+        faceValence = linkValence (getLinkOf fv pg)
 
--- We're almost there Problem is that we didn't "fuse" the vertices
+substitute :: (a -> Bool) -> (a -> a) -> [a] -> [a]
+substitute _ _ [] = []
+substitute pr f (x:xs)
+  | pr x    = f x : substitute pr f xs
+  | otherwise = x : substitute pr f xs
+
+
+-- idea behind fuseLink is this: If l looks like
+-- l = [a, b, f1, f2, c, d, e] (f1, f2 <- f), then it's reflected version is
+-- rl = [c', f2', f1', b', a', e', d']
+-- (In our construction, rl is actually more like l reversed, but things might
+-- change. I'll just do the more general version.
+--
+-- We want the fusion to look like
+-- [a, b, b', a', e', d', c', c, d, e] 
+-- so that the fi's act like teleporters to the other list.
+--
+-- split l to [[a,b], [c,d,e]]
+-- split rl = [[c'], [b',a',e',d']]. Then patch them up? They match up along
+-- vertices that are reflections of the others.
+--
+-- | If linkVertex l is in f and the valence of linkVertex l > 3, then fuseLink
+-- produces the new link replacing the link of linkVertex l in the double of pg.
+fuseLink :: Link Vertex -> Face -> PlanarGraph -> Link Vertex
+fuseLink l f pg = Link (linkVertex l, lPieces ++ rlPieces)
+ where fVerts = fvertices f `intersect` linkVertices l
+       rfVerts = map (`oppositeVertex` pg) fVerts
+       teleporters = fVerts `union` map (`oppositeVertex` pg) fVerts
+       lVerts  = linkVertices l
+       rlVerts = map (`oppositeVertex` pg) lVerts
+       lPieces = head $ filter (not . null) $ splitOneOf teleporters (faceHead lVerts fVerts)
+       rlPieces = head $ filter (not . null) $ splitOneOf teleporters (faceHead rlVerts rfVerts)
+
+-- Even better for simplicity: Rotate so that the face vertices are are at
+-- head/last
+
+faceHead :: Eq a => [a] -> -- input list
+                    [a] -> -- what should be at the front
+                    [a]
+faceHead [] _ = []
+faceHead inp frt
+  | head inp `elem` frt = inp
+  | otherwise           = faceHead ((tail inp) ++ [head inp]) frt
+
 
 fixLink :: Vertex -> Vertex -> Face -> PlanarGraph -> [Vertex]
 fixLink n v f pg = sub (linkVertices (getLinkOf v pg))

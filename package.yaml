@@ -25,6 +25,7 @@ dependencies:
 - hspec
 - QuickCheck
 - array
+- split
 
 library:
   source-dirs: src
