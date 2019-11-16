@@ -4,13 +4,20 @@
 module Planar
     ( moveRight
     , moveLeft
+    , numFaces
+    , pgFaces
+    , pgVertices
+    , doublePG
     , Link (Link)
     , Vertex
+    , PlanarGraph (PG)
+    , Face
     ) where
 
 import Data.List
 import Data.List.Split (splitOneOf)
 import Data.Maybe
+
 
 -- Plan: I want to encode a planar embedding of a graph. The idea is to use the
 -- Data.Graph data structure and then to assign additional information to the
@@ -34,7 +41,7 @@ instance Functor PlanarGraph where
   fmap f (PG ls) = PG (map (fmap f) ls)
 
 -- TODO: This Eq is too restrictive. Need to allow for cyclic reorderings to be
--- equal.
+-- equal. 
 newtype Link a = Link { linkPair :: (a, [a])} deriving (Show, Eq)
 instance Functor Link where
   fmap f (Link xp) = Link (f $ fst xp, map f (snd xp))
@@ -170,6 +177,7 @@ linkOfFace face pg = [ l | l<-links pg,
                            any (\v -> v `elem` linkVertices l) (fvertices face) ] 
 
 
+-- TODO (MAJOR TODO). Test this carefully.
 doublePG :: PlanarGraph Vertex -> Face -> PlanarGraph Vertex
 doublePG pg f = reindexPG $ PG ( concatMap (makeLinks pg f) (links pg)) 
 
@@ -204,7 +212,7 @@ makeLinks pg f l
        Link (oppositeVertex lVlf pg,
              reverse $
              map link3 lVslf)]
-  | otherwise   = [l, shiftLink (maxIndex pg) l]                                -- l not in link of face f
+  | otherwise   = [l, revLink $ shiftLink (maxIndex pg) l]                                -- l not in link of face f
   where linkF = linkOfFace f pg
         lVlf = linkVertex l
         lVslf = linkVertices l
@@ -232,7 +240,7 @@ fuseLink l f pg = Link (linkVertex l, lPieces ++ rlPieces)
        rfVerts = map (`oppositeVertex` pg) fVerts
        teleporters = fVerts `union` map (`oppositeVertex` pg) fVerts
        lVerts  = linkVertices l
-       rlVerts = map (`oppositeVertex` pg) lVerts
+       rlVerts = reverse $ map (`oppositeVertex` pg) lVerts
        lPieces = head $ filter (not . null) $ splitOneOf teleporters (faceHead lVerts fVerts)
        rlPieces = head $ filter (not . null) $ splitOneOf teleporters (faceHead rlVerts rfVerts)
 
@@ -247,11 +255,6 @@ faceHead inp frt
   | head inp `elem` frt = inp
   | otherwise           = faceHead (tail inp ++ [head inp]) frt
 
-
-
--- Tetrahedron (for testing purposes)
--- Note that the fact that Graph is directed has no effect whatsoever on what
--- we've done so far. Good. Just beware.
 tetrahedron :: PlanarGraph Vertex
 tetrahedron = PG [Link (1, [2,3,4]),
                   Link (2, [3,1,4]),
@@ -287,5 +290,7 @@ octahedron = PG [Link (1, [2, 5, 6, 3]),
                  Link (4, [3 ,6 ,5 ,2]),
                  Link (5, [1 ,2 ,4 ,6]),
                  Link (6, [1 ,5 ,4 ,3])]
+
+
 
 
