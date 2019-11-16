@@ -26,9 +26,12 @@ import Data.Maybe
 -- Maybe this?
 
 type Vertex = Int
-newtype PlanarGraph = PG {
-                        links :: [Link Vertex]
+newtype PlanarGraph a = PG {
+                        links :: [Link a]
                       } deriving Show
+
+instance Functor PlanarGraph where
+  fmap f (PG ls) = PG (map (fmap f) ls)
 
 -- TODO: This Eq is too restrictive. Need to allow for cyclic reorderings to be
 -- equal.
@@ -43,14 +46,20 @@ instance Eq Face where
 
 
 
-pgVertices :: PlanarGraph -> [Vertex]
+pgVertices :: PlanarGraph Vertex -> [Vertex]
 pgVertices pg = map linkVertex (links pg)
+
+-- | Reindex a PG's vertices sequentially starting from 1
+reindexPG :: PlanarGraph Vertex -> PlanarGraph Vertex
+reindexPG pg = rein <$> pg
+  where indexAssoc = zip (pgVertices pg) [1..]
+        rein v = fromJust $ lookup v indexAssoc
 
 
 -- Functions for Link(s)
 
 -- | Gets the link of the vertex in the graph
-getLinkOf :: Vertex -> PlanarGraph -> Link Vertex
+getLinkOf :: Vertex -> PlanarGraph Vertex -> Link Vertex
 getLinkOf v pg = Link (v, fromMaybe [] (lookup v (map linkPair $ links pg)))
 
 -- | Vertex at which Link is centered
@@ -89,18 +98,15 @@ faceLength :: Face -> Int
 faceLength = length . fvertices
 
 
--- Get the face containing v1 and directed edge v1->v2 to the left of v1->v2
--- TODO: Make a test case for this! I'm on a roll, so don't feel like it now.
---
 -- | Returns the face to the left of the direct edge v1->v2
 faceLeftOf :: Vertex ->       -- ^ v1
               Vertex ->       -- ^ v2
-              PlanarGraph ->  -- ^ pg
+              PlanarGraph Vertex ->  -- ^ pg
               Face
 faceLeftOf v1 v2 pg = faceLeftOf' v1 v2 pg []
   where linkv1   = getLinkOf v1 pg
         lastVert = moveLeft v2 linkv1
-        faceLeftOf' :: Vertex -> Vertex -> PlanarGraph -> [Vertex] -> Face
+        faceLeftOf' :: Vertex -> Vertex -> PlanarGraph Vertex -> [Vertex] -> Face
         faceLeftOf' v1' v2' pg' acc 
           | lastVert `elem` acc = Face acc
           | otherwise           = faceLeftOf' v2'
@@ -111,37 +117,27 @@ faceLeftOf v1 v2 pg = faceLeftOf' v1 v2 pg []
                 nextVert = moveRight v1' linkv2 -- Careful here!
 
 -- | Returns all faces incident to the vertex v in pg.
-findFacesAtV :: Vertex -> PlanarGraph -> [Face]
+findFacesAtV :: Vertex -> PlanarGraph Vertex -> [Face]
 findFacesAtV v pg = [ faceLeftOf v v2 pg | v2<-linkVertices $ getLinkOf v pg ]
 
 -- | Returns a list of all faces of the PG
-pgFaces :: PlanarGraph -> [Face]
+pgFaces :: PlanarGraph Vertex -> [Face]
 pgFaces pg = nub faces
   where faces = concat [findFacesAtV v pg | v<-pgVertices pg ]
 
 -- | Returns the number of faces of the PG
-numFaces :: PlanarGraph -> Int
+numFaces :: PlanarGraph Vertex -> Int
 numFaces = length . pgFaces
 
---LOLWUT. Both pgFaces and numFaces give Exception: divide by zero when applied
---to doubled tetrahedron..
---
--- Ok, I'm on to it. There are Vertex in some of the links of dc that do not
--- appear as vertices. Something is still wrong with the doubling.
-
-
--- Idea for doubling along a face:
--- 1) Reflect PG. Simply take all the same data and reverse the links
--- 2) Look at maximal index of og PG. Increase all vertices in the reflected PG
--- by this amount.
--- 3) Build new PG by fusing the face. This is definitely doable!
---
 -- | Shift all vertex indices in the PG by n. Used for copying a PG.
-shiftIndicesPG :: Int -> PlanarGraph -> PlanarGraph
+shiftIndicesPG :: Int -> PlanarGraph Vertex -> PlanarGraph Vertex
 shiftIndicesPG n pg = PG (shiftLinks n (links pg)) 
 
 shiftLinks :: Int -> [Link Vertex] -> [Link Vertex]
 shiftLinks n = map ((n+) <$>)
+
+shiftLink :: Int -> Link Vertex -> Link Vertex
+shiftLink n l = (n+) <$> l
 
 shiftFace :: Int -> Face -> Face
 shiftFace n (Face vs) = Face (map (n+) vs)
@@ -152,14 +148,14 @@ revLink :: Link Vertex -> Link Vertex
 revLink (Link (v,vs)) = Link (v, reverse vs)
 
 -- | Returns mirror image of PG.
-reflectPG :: PlanarGraph -> PlanarGraph
+reflectPG :: PlanarGraph Vertex -> PlanarGraph Vertex
 reflectPG pg = PG (map revLink (links pg))
 
 
-maxIndex :: PlanarGraph -> Int
+maxIndex :: PlanarGraph Vertex -> Int
 maxIndex = maximum . pgVertices 
 
-minIndex :: PlanarGraph -> Int
+minIndex :: PlanarGraph Vertex -> Int
 minIndex = minimum . pgVertices 
 
 filterFace :: Face -> Link Vertex -> Bool
@@ -168,76 +164,14 @@ filterFace face link = linkVertex link `notElem` fvertices face
 filterVertex :: Vertex -> Link Vertex -> Bool
 filterVertex v link = linkVertex link /= v
 
-linkOfFace :: Face -> PlanarGraph -> [Link Vertex]
+linkOfFace :: Face -> PlanarGraph Vertex -> [Link Vertex]
 linkOfFace face pg = [ l | l<-links pg,
                            linkVertex l `notElem` fvertices face,
                            any (\v -> v `elem` linkVertices l) (fvertices face) ] 
 
--- TODO: Remove this. It is the wrong thing to do. I'm just leaving it for now
--- since it surpresses the errors with the currently incorrect doublePG
-fixLink :: Vertex -> Vertex -> Face -> PlanarGraph -> [Vertex]
-fixLink n v f pg = sub (linkVertices (getLinkOf v pg))
-  where sub [] = []
-        sub (x:xs)
-          | x `elem` fvertices f = (x + n) : sub xs 
-          | otherwise = x : sub xs
 
--- This only makes sense for right-angled faces with all vertices degree 3
--- TODO: rewrite this to take advantage of updateLink.
-
-doublePG :: PlanarGraph -> Face -> PlanarGraph
-doublePG pg face = PG (nub $ lwofandnbrs ++ rlwofandnbrs ++ addedLinks ++ raddedLinks)
-  where reflectedPg = shiftIndicesPG (maxIndex pg) (reflectPG pg) -- reflect pg
-        reflFace = shiftFace (maxIndex pg) face
-        linksWoFace = filter (filterFace face) (links pg) -- remove links with Vertex in face
-        rlinksWoFace = filter (filterFace reflFace) (links reflectedPg) -- as above, but for reflected
-        -- Remove all links centered at a vertex in the link of a vertex of face
-        lwofandnbrs = filter (\l -> l `notElem` linkOfFace face pg) linksWoFace
-        -- same, but for reflected
-        rlwofandnbrs = filter (\l -> l `notElem` linkOfFace reflFace reflectedPg) rlinksWoFace
-        -- I'm really not sure that fixLink is doing the right thing
-        addedLinks = [ Link (a, fixLink (maxIndex pg) a face pg) | 
-                            vf<-fvertices face,
-                            a<-filter (\x -> x `notElem` fvertices face)
-                                      (linkVertices (getLinkOf vf pg)) ]
-        raddedLinks = [ Link (a, fixLink ((-1) * maxIndex pg) a reflFace reflectedPg) | 
-                             vf<-fvertices reflFace,
-                             a<-filter (\x -> x `notElem` fvertices reflFace)
-                                       (linkVertices (getLinkOf vf reflectedPg)) ]
-
--- doublePG' :: PlanarGraph -> Face -> PlanarGraph
--- doublePG' pg face = PG (nub $ lwofandnbrs ++ rlwofandnbrs ++ addedLinks ++ raddedLinks)
-  -- where reflectedPg = shiftIndicesPG (maxIndex pg) (reflectPG pg) -- reflect pg
-        -- reflFace = shiftFace (maxIndex pg) face
-        -- linksWoFace = filter (filterFace face) (links pg) -- remove links with Vertex in face
-        -- rlinksWoFace = filter (filterFace reflFace) (links reflectedPg) -- as above, but for reflected
-        -- -- Remove all links centered at a vertex in the link of a vertex of face
-        -- lwofandnbrs = filter (\l -> l `notElem` linkOfFace face pg) linksWoFace
-        -- -- same, but for reflected
-        -- rlwofandnbrs = filter (\l -> l `notElem` linkOfFace reflFace reflectedPg) rlinksWoFace
-        -- -- I'm really not sure that fixLink is doing the right thing
-        -- addedLinks = [ Link (a, fixLink (maxIndex pg) a face pg) |
-                            -- vf<-fvertices face,
-                            -- a<-filter (\x -> x `notElem` fvertices face)
-                                      -- (linkVertices (getLinkOf vf pg)) ]
-        -- raddedLinks = [ Link (a, fixLink ((-1) * maxIndex pg) a reflFace reflectedPg) |
-                             -- vf<-fvertices reflFace,
-                             -- a<-filter (\x -> x `notElem` fvertices reflFace)
-                                       -- (linkVertices (getLinkOf vf reflectedPg)) ]
-
-        --                     /
-        --                    /
-        --    *--------------*---------------*
-        --                   |
-        --                   |
-        --                   |
-        --                   |
-        --    *--------------*---------------*
-        --    a              v              b
-        --
-        --    What I really want fixLink to do is not simply add to the index.
-        --    It should leave from a towards the face and pop out on the other
-        --    side. In the link of a, I want to replace v with b.
+doublePG :: PlanarGraph Vertex -> Face -> PlanarGraph Vertex
+doublePG pg f = reindexPG $ PG ( concatMap (makeLinks pg f) (links pg)) 
 
 
 -- | returns the image of v when reflected a face. This is only relevant when
@@ -245,48 +179,43 @@ doublePG pg face = PG (nub $ lwofandnbrs ++ rlwofandnbrs ++ addedLinks ++ radded
 -- reflection, the opposite vertex is always going to be the one shifted by
 -- maxIndex pg. `mod` (2*shift) makes it so that this works also for vertices in
 -- the reflected copy of pg.
-oppositeVertex :: Vertex -> PlanarGraph -> Vertex
-oppositeVertex v pg = let shift = maxIndex pg - minIndex pg + 1
-  in (v + shift) `mod` (2*shift)
+oppositeVertex :: Vertex -> PlanarGraph Vertex -> Vertex
+oppositeVertex v pg  
+  | v <= maxIndex pg = v + maxIndex pg 
+  | otherwise        = v - maxIndex pg
 
 
--- I'm writing this just with links in pg in mind. Have to think about how to
--- extend to those in rpg.
---
--- Idea for above comment: It's symmetric, so how about just adding in the
--- reflected links as we work through. This'll take care of vertex duplication
--- too.
--- TODO: This really deserves a full suite of tests. (Also, it's 24 lines ;) )
--- TODO: A little flaw. My idea for doubling is to take all the links of pg and
--- rpg and then to just run updateLink over all of them. Since I was pg focused
--- when writing this, it won't really work on the rpg portion. Have to think
--- about how to fix that.
-updateLink :: Link Vertex -> Face -> PlanarGraph -> Maybe (Link Vertex)
-updateLink l f pg
-  | lVlf `elem` fVerts && length lVslf == 3 = Nothing   -- linkVertex l in f is trivalent (Nothing)
-  | lVlf `elem` fVerts && length lVslf > 3  = Just $ fuseLink l f pg -- linkVertex l in f is higher degree
-  | l `elem` linkF && faceValence == 4 = 
-      if lVlf `elem` pgVertices pg
-        then Just l
-        else Just (Link (linkVertex l, 
-                   substitute (`elem` rfVerts) 
-                              (`oppositeVertex` pg)
-                              lVslf))                  -- l in link of face f, meets f at degree-4 vertex
+-- | makeLinks looks at a link l of a pg and constructs 0, 1, or 2 links
+-- corresponding to what links come from l in the double of pg
+makeLinks :: PlanarGraph Vertex -> Face -> Link Vertex -> [Link Vertex]
+makeLinks pg f l
+  | lVlf `elem` fVerts && length lVslf == 3 = []   -- linkVertex l in f is trivalent (Nothing)
+  | lVlf `elem` fVerts && length lVslf > 3  = [fuseLink l f pg] -- linkVertex l in f is higher degree
+  | l `elem` linkF && faceValence == 4 = [l, Link (oppositeVertex lVlf pg, 
+                                                   reverse $
+                                                   substitute (`notElem` fVerts) 
+                                                              (`oppositeVertex` pg)
+                                                              lVslf)]     -- l in link of face f, meets f at degree-4 vertex
   | l `elem` linkF && faceValence == 3 =            --  l in link of face f, meets f at degree-3 vertex
-      Just (Link (linkVertex l,
-            substitute (\v -> (v `elem` fVerts) ||
-                              (v `elem` rfVerts))
+      [Link (linkVertex l,
+            substitute (`elem` fVerts)
                        (const $ oppositeVertex lVlf pg)
-                       lVslf))
-  | otherwise   = Just l                                -- l not in link of face f
+                       lVslf),
+       Link (oppositeVertex lVlf pg,
+             reverse $
+             map link3 lVslf)]
+  | otherwise   = [l, shiftLink (maxIndex pg) l]                                -- l not in link of face f
   where linkF = linkOfFace f pg
         lVlf = linkVertex l
         lVslf = linkVertices l
         fVerts = fvertices f
-        rfVerts = map (`oppositeVertex` pg) fVerts
         fv = head ( linkVertices l `intersect` fVerts)
         faceValence = linkValence (getLinkOf fv pg)
+        link3 v 
+          | v `elem` fVerts = linkVertex l 
+          | otherwise = oppositeVertex v pg
 
+-- | subsitutes elements satisfying a predicate in a list via a function
 substitute :: (a -> Bool) -> (a -> a) -> [a] -> [a]
 substitute _ _ [] = []
 substitute pr f (x:xs)
@@ -294,23 +223,10 @@ substitute pr f (x:xs)
   | otherwise = x : substitute pr f xs
 
 
--- idea behind fuseLink is this: If l looks like
--- l = [a, b, f1, f2, c, d, e] (f1, f2 <- f), then it's reflected version is
--- rl = [c', f2', f1', b', a', e', d']
--- (In our construction, rl is actually more like l reversed, but things might
--- change. I'll just do the more general version.
---
--- We want the fusion to look like
--- [a, b, b', a', e', d', c', c, d, e] 
--- so that the fi's act like teleporters to the other list.
---
--- split l to [[a,b], [c,d,e]]
--- split rl = [[c'], [b',a',e',d']]. Then patch them up? They match up along
--- vertices that are reflections of the others.
 --
 -- | If linkVertex l is in f and the valence of linkVertex l > 3, then fuseLink
 -- produces the new link replacing the link of linkVertex l in the double of pg.
-fuseLink :: Link Vertex -> Face -> PlanarGraph -> Link Vertex
+fuseLink :: Link Vertex -> Face -> PlanarGraph Vertex -> Link Vertex
 fuseLink l f pg = Link (linkVertex l, lPieces ++ rlPieces)
  where fVerts = fvertices f `intersect` linkVertices l
        rfVerts = map (`oppositeVertex` pg) fVerts
@@ -336,13 +252,13 @@ faceHead inp frt
 -- Tetrahedron (for testing purposes)
 -- Note that the fact that Graph is directed has no effect whatsoever on what
 -- we've done so far. Good. Just beware.
-tetrahedron :: PlanarGraph
+tetrahedron :: PlanarGraph Vertex
 tetrahedron = PG [Link (1, [2,3,4]),
                   Link (2, [3,1,4]),
                   Link (3, [1,2,4]),
                   Link (4, [1,3,2])]
 
-cube :: PlanarGraph
+cube :: PlanarGraph Vertex
 cube= PG [Link (1, [2,3,5]),
           Link (2, [1,6,4]),
           Link (3, [1,4,7]),
@@ -364,7 +280,7 @@ cube= PG [Link (1, [2,3,5]),
 --        2               3
 --
 
-octahedron :: PlanarGraph
+octahedron :: PlanarGraph Vertex
 octahedron = PG [Link (1, [2, 5, 6, 3]),
                  Link (2, [3, 4, 5, 1]),
                  Link (3, [1 ,6 ,4 ,2]),
