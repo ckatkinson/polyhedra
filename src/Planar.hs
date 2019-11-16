@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS -Wno-unused-top-binds #-}
+-- {-# OPTIONS -Wno-unused-top-binds #-}
 
 module Planar
     ( moveRight
@@ -12,6 +12,9 @@ module Planar
     , Vertex
     , PlanarGraph (PG)
     , Face
+    , cube
+    , tetrahedron
+    , octahedron
     ) where
 
 import Data.List
@@ -101,9 +104,6 @@ moveLeft e l  = linkVertices l !! rIndex
 
 -- FACE stuff
 
-faceLength :: Face -> Int
-faceLength = length . fvertices
-
 
 -- | Returns the face to the left of the direct edge v1->v2
 faceLeftOf :: Vertex ->       -- ^ v1
@@ -129,47 +129,24 @@ findFacesAtV v pg = [ faceLeftOf v v2 pg | v2<-linkVertices $ getLinkOf v pg ]
 
 -- | Returns a list of all faces of the PG
 pgFaces :: PlanarGraph Vertex -> [Face]
-pgFaces pg = nub faces
+pgFaces pg = nub faces -- This is likely slow. Could consider a set here.
   where faces = concat [findFacesAtV v pg | v<-pgVertices pg ]
 
 -- | Returns the number of faces of the PG
 numFaces :: PlanarGraph Vertex -> Int
 numFaces = length . pgFaces
 
--- | Shift all vertex indices in the PG by n. Used for copying a PG.
-shiftIndicesPG :: Int -> PlanarGraph Vertex -> PlanarGraph Vertex
-shiftIndicesPG n pg = PG (shiftLinks n (links pg)) 
-
-shiftLinks :: Int -> [Link Vertex] -> [Link Vertex]
-shiftLinks n = map ((n+) <$>)
 
 shiftLink :: Int -> Link Vertex -> Link Vertex
 shiftLink n l = (n+) <$> l
-
-shiftFace :: Int -> Face -> Face
-shiftFace n (Face vs) = Face (map (n+) vs)
-
 
 -- | Flips the link for reflecting PG.
 revLink :: Link Vertex -> Link Vertex
 revLink (Link (v,vs)) = Link (v, reverse vs)
 
--- | Returns mirror image of PG.
-reflectPG :: PlanarGraph Vertex -> PlanarGraph Vertex
-reflectPG pg = PG (map revLink (links pg))
-
 
 maxIndex :: PlanarGraph Vertex -> Int
 maxIndex = maximum . pgVertices 
-
-minIndex :: PlanarGraph Vertex -> Int
-minIndex = minimum . pgVertices 
-
-filterFace :: Face -> Link Vertex -> Bool
-filterFace face link = linkVertex link `notElem` fvertices face
-
-filterVertex :: Vertex -> Link Vertex -> Bool
-filterVertex v link = linkVertex link /= v
 
 linkOfFace :: Face -> PlanarGraph Vertex -> [Link Vertex]
 linkOfFace face pg = [ l | l<-links pg,
