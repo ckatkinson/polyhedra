@@ -33,15 +33,16 @@ import Data.Maybe
 -- and Data.List.PointedList. Adding to the project is proving to be a major
 -- headache right now. Just want proof of concept)
 
--- Maybe this?
 
-type Vertex = Int
+type Vertex           = Int
 newtype PlanarGraph a = PG {
                         links :: [Link a]
-                      } deriving Show
+                           } deriving Show
 
 instance Functor PlanarGraph where
   fmap f (PG ls) = PG (map (fmap f) ls)
+
+type Graph = PlanarGraph Vertex
 
 -- TODO: This Eq is too restrictive. Need to allow for cyclic reorderings to be
 -- equal. 
@@ -56,20 +57,19 @@ instance Eq Face where
 
 
 
-pgVertices :: PlanarGraph Vertex -> [Vertex]
+pgVertices :: Graph -> [Vertex]
 pgVertices pg = map linkVertex (links pg)
 
 -- | Reindex a PG's vertices sequentially starting from 1
-reindexPG :: PlanarGraph Vertex -> PlanarGraph Vertex
+reindexPG :: Graph -> Graph
 reindexPG pg = rein <$> pg
   where indexAssoc = zip (pgVertices pg) [1..]
         rein v = fromJust $ lookup v indexAssoc
 
-
 -- Functions for Link(s)
 
 -- | Gets the link of the vertex in the graph
-getLinkOf :: Vertex -> PlanarGraph Vertex -> Link Vertex
+getLinkOf :: Vertex -> Graph -> Link Vertex
 getLinkOf v pg = Link (v, fromMaybe [] (lookup v (map linkPair $ links pg)))
 
 -- | Vertex at which Link is centered
@@ -86,18 +86,18 @@ linkValence = length . linkVertices
 
 
 -- | Move right in the link:
-moveRight :: Vertex -> -- ^ Current vertex in link
-             Link Vertex   -> -- ^ Link we're working in
-             Vertex    -- ^ Vertex to the right
-moveRight e l = linkVertices l !! rIndex
+moveRight :: Vertex      -> -- ^ Current vertex in link
+             Link Vertex -> -- ^ Link we're working in
+             Vertex         -- ^ Vertex to the right
+moveRight e l  = linkVertices l !! rIndex
   where eIndex = fromJust $ elemIndex e (linkVertices l)
         rIndex = (eIndex + 1) `mod` length (linkVertices l)
 
 -- | Move left in the link:
-moveLeft ::  Vertex -> -- ^ Current vertex in link
-             Link Vertex   -> -- ^ Link we're working in
-             Vertex    -- ^ Vertex to the left
-moveLeft e l  = linkVertices l !! rIndex
+moveLeft ::  Vertex      -> -- ^ Current vertex in link
+             Link Vertex -> -- ^ Link we're working in
+             Vertex         -- ^ Vertex to the left
+moveLeft e l   = linkVertices l !! rIndex
   where eIndex = fromJust $ elemIndex e (linkVertices l)
         rIndex = (eIndex - 1) `mod` length (linkVertices l)
 
@@ -106,34 +106,34 @@ moveLeft e l  = linkVertices l !! rIndex
 
 
 -- | Returns the face to the left of the direct edge v1->v2
-faceLeftOf :: Vertex ->       -- ^ v1
-              Vertex ->       -- ^ v2
-              PlanarGraph Vertex ->  -- ^ pg
+faceLeftOf :: Vertex -> -- ^ v1
+              Vertex -> -- ^ v2
+              Graph  -> -- ^ pg
               Face
 faceLeftOf v1 v2 pg = faceLeftOf' v1 v2 pg []
   where linkv1   = getLinkOf v1 pg
         lastVert = moveLeft v2 linkv1
-        faceLeftOf' :: Vertex -> Vertex -> PlanarGraph Vertex -> [Vertex] -> Face
+        faceLeftOf' :: Vertex -> Vertex -> Graph -> [Vertex] -> Face
         faceLeftOf' v1' v2' pg' acc 
           | lastVert `elem` acc = Face acc
           | otherwise           = faceLeftOf' v2'
                                               nextVert 
                                               pg'
                                               (v1':acc)
-          where linkv2 = getLinkOf v2' pg
+          where linkv2   = getLinkOf v2' pg
                 nextVert = moveRight v1' linkv2 -- Careful here!
 
 -- | Returns all faces incident to the vertex v in pg.
-findFacesAtV :: Vertex -> PlanarGraph Vertex -> [Face]
+findFacesAtV :: Vertex -> Graph -> [Face]
 findFacesAtV v pg = [ faceLeftOf v v2 pg | v2<-linkVertices $ getLinkOf v pg ]
 
 -- | Returns a list of all faces of the PG
-pgFaces :: PlanarGraph Vertex -> [Face]
+pgFaces :: Graph -> [Face]
 pgFaces pg = nub faces -- This is likely slow. Could consider a set here.
   where faces = concat [findFacesAtV v pg | v<-pgVertices pg ]
 
 -- | Returns the number of faces of the PG
-numFaces :: PlanarGraph Vertex -> Int
+numFaces :: Graph -> Int
 numFaces = length . pgFaces
 
 
@@ -144,27 +144,27 @@ shiftLink n l = (n+) <$> l
 revLink :: Link Vertex -> Link Vertex
 revLink (Link (v,vs)) = Link (v, reverse vs)
 
-
-maxIndex :: PlanarGraph Vertex -> Int
+-- | Maximum vertex index in graph
+maxIndex :: Graph -> Int
 maxIndex = maximum . pgVertices 
 
-linkOfFace :: Face -> PlanarGraph Vertex -> [Link Vertex]
+
+-- | Union of links of vertices that lie in the link of a vertex of face (but
+-- not in face)
+linkOfFace :: Face -> Graph -> [Link Vertex]
 linkOfFace face pg = [ l | l<-links pg,
                            linkVertex l `notElem` fvertices face,
                            any (\v -> v `elem` linkVertices l) (fvertices face) ] 
 
 
 -- TODO (MAJOR TODO). Test this carefully.
-doublePG :: PlanarGraph Vertex -> Face -> PlanarGraph Vertex
+doublePG :: Graph -> Face -> Graph
 doublePG pg f = reindexPG $ PG ( concatMap (makeLinks pg f) (links pg)) 
 
 
 -- | returns the image of v when reflected a face. This is only relevant when
--- pg is a cubic graph. Which face is in fact irrelevant because when we do the
--- reflection, the opposite vertex is always going to be the one shifted by
--- maxIndex pg. `mod` (2*shift) makes it so that this works also for vertices in
--- the reflected copy of pg.
-oppositeVertex :: Vertex -> PlanarGraph Vertex -> Vertex
+-- pg is a cubic graph. 
+oppositeVertex :: Vertex -> Graph -> Vertex
 oppositeVertex v pg  
   | v <= maxIndex pg = v + maxIndex pg 
   | otherwise        = v - maxIndex pg
@@ -172,7 +172,7 @@ oppositeVertex v pg
 
 -- | makeLinks looks at a link l of a pg and constructs 0, 1, or 2 links
 -- corresponding to what links come from l in the double of pg
-makeLinks :: PlanarGraph Vertex -> Face -> Link Vertex -> [Link Vertex]
+makeLinks :: Graph -> Face -> Link Vertex -> [Link Vertex]
 makeLinks pg f l
   | lVlf `elem` fVerts && length lVslf == 3 = []   -- linkVertex l in f is trivalent (Nothing)
   | lVlf `elem` fVerts && length lVslf > 3  = [fuseLink l f pg] -- linkVertex l in f is higher degree
@@ -211,7 +211,7 @@ substitute pr f (x:xs)
 --
 -- | If linkVertex l is in f and the valence of linkVertex l > 3, then fuseLink
 -- produces the new link replacing the link of linkVertex l in the double of pg.
-fuseLink :: Link Vertex -> Face -> PlanarGraph Vertex -> Link Vertex
+fuseLink :: Link Vertex -> Face -> Graph -> Link Vertex
 fuseLink l f pg = Link (linkVertex l, lPieces ++ rlPieces)
  where fVerts = fvertices f `intersect` linkVertices l
        rfVerts = map (`oppositeVertex` pg) fVerts
@@ -232,13 +232,13 @@ faceHead inp frt
   | head inp `elem` frt = inp
   | otherwise           = faceHead (tail inp ++ [head inp]) frt
 
-tetrahedron :: PlanarGraph Vertex
+tetrahedron :: Graph
 tetrahedron = PG [Link (1, [2,3,4]),
                   Link (2, [3,1,4]),
                   Link (3, [1,2,4]),
                   Link (4, [1,3,2])]
 
-cube :: PlanarGraph Vertex
+cube :: Graph
 cube= PG [Link (1, [2,3,5]),
           Link (2, [1,6,4]),
           Link (3, [1,4,7]),
@@ -260,7 +260,7 @@ cube= PG [Link (1, [2,3,5]),
 --        2               3
 --
 
-octahedron :: PlanarGraph Vertex
+octahedron :: Graph
 octahedron = PG [Link (1, [2, 5, 6, 3]),
                  Link (2, [3, 4, 5, 1]),
                  Link (3, [1 ,6 ,4 ,2]),
