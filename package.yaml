@@ -26,6 +26,15 @@ dependencies:
 - QuickCheck
 - array
 - split
+- diagrams
+- diagrams-lib
+- diagrams-svg
+- diagrams-contrib
+- diagrams-core
+- diagrams-rasterific
+- graphviz
+- fgl
+- diagrams-graphviz >= 1.4.1.1
 
 library:
   source-dirs: src
