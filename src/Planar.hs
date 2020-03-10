@@ -7,20 +7,27 @@ module Planar
     , numFaces
     , pgFaces
     , pgVertices
+    , pgEdges
     , doublePG
     , Link (Link)
     , Vertex
     , PlanarGraph (PG)
     , Face
-    , cube
+    , pgCube
     , tetrahedron
     , octahedron
+    , gvGraph
     ) where
 
 import Data.List
 import Data.List.Split (splitOneOf)
 import Data.Maybe
 
+import Diagrams.Backend.SVG.CmdLine
+import Diagrams.Prelude
+import Diagrams.TwoD.GraphViz
+import Data.GraphViz
+import Data.Graph.Inductive.PatriciaTree
 
 -- Plan: I want to encode a planar embedding of a graph. The idea is to use the
 -- Data.Graph data structure and then to assign additional information to the
@@ -38,6 +45,9 @@ type Vertex           = Int
 newtype PlanarGraph a = PG {
                         links :: [Link a]
                            } deriving Show
+
+type Edge = (Vertex, Vertex)
+type GvEdge = (Vertex, Vertex, ())
 
 instance Functor PlanarGraph where
   fmap f (PG ls) = PG (map (fmap f) ls)
@@ -100,6 +110,20 @@ moveLeft ::  Vertex      -> -- ^ Current vertex in link
 moveLeft e l   = linkVertices l !! rIndex
   where eIndex = fromJust $ elemIndex e (linkVertices l)
         rIndex = (eIndex - 1) `mod` length (linkVertices l)
+
+-- EDGE stuff
+
+-- | Gives list of edges of graph.
+-- We only want to get each edge once, so it suffices to just add edges (v,w)
+-- where w > v. 
+pgEdges :: Graph -> [Edge]
+pgEdges pg = concatMap (\v -> [(v, w) | w <- linkBigger v]) pgVerts
+    where pgVerts = pgVertices pg
+          linkBigger :: Vertex -> [Vertex]
+          linkBigger v = filter ( > v) (linkVertices $ getLinkOf v pg)
+
+mkGvEdge :: Edge -> GvEdge
+mkGvEdge (v,w) = (v,w,())
 
 
 -- FACE stuff
@@ -203,9 +227,9 @@ makeLinks pg f l
 -- | subsitutes elements satisfying a predicate in a list via a function
 substitute :: (a -> Bool) -> (a -> a) -> [a] -> [a]
 substitute _ _ [] = []
-substitute pr f (x:xs)
-  | pr x    = f x : substitute pr f xs
-  | otherwise = x : substitute pr f xs
+substitute p f (x:xs)
+  | p x    = f x : substitute p f xs
+  | otherwise = x : substitute p f xs
 
 
 --
@@ -215,7 +239,7 @@ fuseLink :: Link Vertex -> Face -> Graph -> Link Vertex
 fuseLink l f pg = Link (linkVertex l, lPieces ++ rlPieces)
  where fVerts = fvertices f `intersect` linkVertices l
        rfVerts = map (`oppositeVertex` pg) fVerts
-       teleporters = fVerts `union` map (`oppositeVertex` pg) fVerts
+       teleporters = fVerts `Data.List.union` map (`oppositeVertex` pg) fVerts
        lVerts  = linkVertices l
        rlVerts = reverse $ map (`oppositeVertex` pg) lVerts
        lPieces = head $ filter (not . null) $ splitOneOf teleporters (faceHead lVerts fVerts)
@@ -232,14 +256,33 @@ faceHead inp frt
   | head inp `elem` frt = inp
   | otherwise           = faceHead (tail inp ++ [head inp]) frt
 
+
+
+-- DRAWING
+
+-- make the graph
+
+gvGraph :: Planar.Graph -> Data.Graph.Inductive.PatriciaTree.Gr Vertex ()
+gvGraph pg = mkGraph (pgVertices pg) (map mkGvEdge (pgEdges pg))
+
+svgGraph gr = theGraph >>= defaultMain
+    where
+        theGraph :: IO (Diagram B)
+        theGraph = simpleGraphDiagram SVG gr
+
+
+
+
+-- Examples below
+
 tetrahedron :: Graph
 tetrahedron = PG [Link (1, [2,3,4]),
                   Link (2, [3,1,4]),
                   Link (3, [1,2,4]),
                   Link (4, [1,3,2])]
 
-cube :: Graph
-cube= PG [Link (1, [2,3,5]),
+pgCube :: Graph
+pgCube= PG [Link (1, [2,3,5]),
           Link (2, [1,6,4]),
           Link (3, [1,4,7]),
           Link (4, [2,8,3]),
