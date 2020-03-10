@@ -1,6 +1,6 @@
 module Main where
 
-import Sample
+import Planar
 
 main :: IO ()
-main = btest
+main = oc

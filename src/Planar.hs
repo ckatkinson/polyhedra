@@ -17,6 +17,8 @@ module Planar
     , tetrahedron
     , octahedron
     , gvGraph
+    , drawOut
+    , oc
     ) where
 
 import Data.List
@@ -26,7 +28,10 @@ import Data.Maybe
 import Diagrams.Backend.SVG.CmdLine
 import Diagrams.Prelude
 import Diagrams.TwoD.GraphViz
+
 import Data.GraphViz
+-- import Data.GraphViz.Attributes.Complete
+-- import Data.GraphViz.Commands
 import Data.Graph.Inductive.PatriciaTree
 
 -- Plan: I want to encode a planar embedding of a graph. The idea is to use the
@@ -265,12 +270,21 @@ faceHead inp frt
 gvGraph :: Planar.Graph -> Data.Graph.Inductive.PatriciaTree.Gr Vertex ()
 gvGraph pg = mkGraph (pgVertices pg) (map mkGvEdge (pgEdges pg))
 
-svgGraph gr = theGraph >>= defaultMain
-    where
-        theGraph :: IO (Diagram B)
-        theGraph = simpleGraphDiagram SVG gr
+drawOut :: Graph -> IO ()
+drawOut pg = do
+  let params :: GraphvizParams Int v e () v
+      params = defaultDiaParams
+               { fmtEdge = const [arrowTo noArrow] }
+  gr' <- layoutGraph' params Neato (gvGraph pg)
+  let grDrawing :: Diagram B
+      grDrawing = drawGraph
+                     (const $ place (circle 9))
+                     (\_ _ _ _ _ p -> stroke p)
+                     gr'
+  mainWith $ grDrawing # frame 1
 
-
+oc :: IO ()
+oc = drawOut octahedron
 
 
 -- Examples below
