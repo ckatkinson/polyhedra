@@ -4,7 +4,10 @@ module Sample where
 import Diagrams.Backend.SVG.CmdLine
 import Diagrams.Prelude
 import Diagrams.TwoD.GraphViz
+
 import Data.GraphViz
+import Data.GraphViz.Attributes.Complete
+import Data.GraphViz.Commands
 
 -- From
 -- https://hackage.haskell.org/package/diagrams-graphviz-1.4.1.1/docs/Diagrams-TwoD-GraphViz.html
@@ -19,5 +22,20 @@ hex = mkGraph [0..19]
 atest = theGraph >>= defaultMain
   where
     theGraph :: IO (Diagram B)
-    theGraph = simpleGraphDiagram Dot hex
+    theGraph = simpleGraphDiagram Neato hex
       
+
+drawOut gr = do
+  let params :: GraphvizParams Int v e () v
+      params = defaultDiaParams
+               { fmtEdge = const [arrowTo noArrow] }
+  gr' <- layoutGraph' params Neato gr
+  let grDrawing :: Diagram B
+      grDrawing = drawGraph
+                     (const $ place (circle 19))
+                     (\_ _ _ _ _ p -> stroke p)
+                     gr'
+  mainWith $ grDrawing # frame 1
+
+
+btest = drawOut hex
