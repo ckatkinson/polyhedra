@@ -8,6 +8,8 @@ module Planar
     , pgFaces
     , pgVertices
     , pgEdges
+    , mmaEdge
+    , mkMma
     , doublePG
     , Link (Link)
     , Vertex
@@ -19,6 +21,7 @@ module Planar
     , gvGraph
     , drawOut
     , oc
+    , doublings
     ) where
 
 import Data.List
@@ -53,6 +56,16 @@ newtype PlanarGraph a = PG {
 
 type Edge = (Vertex, Vertex)
 type GvEdge = (Vertex, Vertex, ())
+
+mmaEdge :: Edge -> String
+mmaEdge e = "{" ++ show (fst e) ++ "," ++ show (snd e) ++ "}"
+
+mkMma :: Graph -> IO ()
+--mkMma pg = putStrLn $ "Graph[Rule @@@ {" ++ edgs ++ "}, GraphLayout -> \"PlanarEmbedding\"]"
+mkMma pg = putStrLn $ beg ++ edgs ++ finish
+  where edgs = intercalate "," (map mmaEdge $ pgEdges pg)
+        beg = "PlanarGraph[{"
+        finish = "}, VertexLabels -> \"Name\"]"
 
 instance Functor PlanarGraph where
   fmap f (PG ls) = PG (map (fmap f) ls)
@@ -187,8 +200,17 @@ linkOfFace face pg = [ l | l<-links pg,
 
 
 -- TODO (MAJOR TODO). Test this carefully.
+-- I think that the reindexing was only for trivalent vertices or something. For
+-- now, it seems to be acting more predictably without it. Testing on Octahedron
+-- right now...
+--
+-- Ok, going further into doubling, it seems that there are vertex numbers that
+-- get skipped. It doesn't affect anything. The nice thing about NOT reindexing
+-- is that vertices retain their "identity" upon doubling with new vertex
+-- numbers only being introduced for "new" vertices.
 doublePG :: Graph -> Face -> Graph
-doublePG pg f = reindexPG $ PG ( concatMap (makeLinks pg f) (links pg)) 
+--doublePG pg f = reindexPG $ PG ( concatMap (makeLinks pg f) (links pg)) 
+doublePG pg f = PG ( concatMap (makeLinks pg f) (links pg)) 
 
 
 -- | returns the image of v when reflected a face. This is only relevant when
@@ -324,6 +346,17 @@ octahedron = PG [Link (1, [2, 5, 6, 3]),
                  Link (4, [3 ,6 ,5 ,2]),
                  Link (5, [1 ,2 ,4 ,6]),
                  Link (6, [1 ,5 ,4 ,3])]
+
+doublings :: IO ()
+doublings = do mkMma octahedron
+               let doct = doublePG octahedron (Face [6,5,4])
+               mkMma doct
+               let ddoct = doublePG doct (Face [2,4,8,5])
+               mkMma ddoct
+               let dddoct = doublePG ddoct (Face [1,3,6])
+               mkMma dddoct
+               let d4oct = doublePG dddoct (Face [1,2,3,20])
+               mkMma d4oct
 
 
 
