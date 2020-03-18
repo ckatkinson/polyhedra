@@ -78,10 +78,16 @@ newtype Link a = Link { linkPair :: (a, [a])} deriving (Show, Eq)
 instance Functor Link where
   fmap f (Link xp) = Link (f $ fst xp, map f (snd xp))
 
-newtype Face = Face {fvertices :: [Vertex]} deriving (Show, Ord)
+newtype FFace a = Face {fvertices :: [a]} deriving (Show, Ord)
 
-instance Eq Face where
+instance (Eq a, Ord a) => Eq (FFace a) where
   f1 == f2 = sort (fvertices f1) == sort (fvertices f2)
+
+instance Functor FFace where
+  fmap f (Face xs) = Face (map f xs)
+
+type Face = FFace Vertex
+
 
 
 
@@ -327,9 +333,6 @@ doublingSeq g (f:fs) = doublingSeq (doublePG g df) fs
 --
 -- I'll want ColoredGraph to be a functor so that I can apply doublePG in a way
 -- where I recompute the color function for the doubled one.
---
--- TODO: Likely need to rethink Face so that I can make it a functor. Still get
--- confused about doing so, but should be able to figure it out.
 
 data FaceColor = White | Black deriving (Show, Eq)
 
