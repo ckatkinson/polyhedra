@@ -1,3 +1,4 @@
 .stack-work/
 polyhedra.cabal
 *~
+*.swp
