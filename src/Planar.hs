@@ -315,6 +315,29 @@ doublingSeq g (f:fs) = doublingSeq (doublePG g df) fs
   where df = derivedFace f g
 
 
+-- TODO Goal: I want to automate the selection of faces. Girao's paper uses an
+-- alternating black/white sequence of faces (these are right-angled ideal, so
+-- we can always 2-color the faces black/white). Given a pg, how can I keep
+-- track of a coloring?
+--
+-- I guess I want a type ColoredGraph that has both a pg and a function 
+--   color :: Face -> Color
+-- satisfying the condition that whenever f1 and f2 are adjacent, 
+-- color f1 /= color f2.
+--
+-- I'll want ColoredGraph to be a functor so that I can apply doublePG in a way
+-- where I recompute the color function for the doubled one.
+--
+-- TODO: Likely need to rethink Face so that I can make it a functor. Still get
+-- confused about doing so, but should be able to figure it out.
+
+data FaceColor = White | Black deriving (Show, Eq)
+
+data ColoredGraph a = CG 
+                       { planarGraph :: PlanarGraph a
+                       , coloring    :: Face -> FaceColor
+                       }
+
 -- DRAWING
 
 -- make the graph
