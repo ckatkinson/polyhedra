@@ -199,6 +199,9 @@ linkOfFace face pg = [ l | l<-links pg,
                            any (\v -> v `elem` linkVertices l) (fvertices face) ] 
 
 
+
+
+
 -- TODO (MAJOR TODO). Test this carefully.
 -- I think that the reindexing was only for trivalent vertices or something. For
 -- now, it seems to be acting more predictably without it. Testing on Octahedron
@@ -283,6 +286,33 @@ faceHead inp frt
   | head inp `elem` frt = inp
   | otherwise           = faceHead (tail inp ++ [head inp]) frt
 
+
+-- More functionality
+isSublistOf :: Eq a => [a] -> [a] -> Bool
+isSublistOf [] _      = True
+isSublistOf (x:xs) ys  
+  | x `elem` ys = isSublistOf xs ys
+  | otherwise   = False
+
+isDerivedFaceOf :: Face -> Face -> Bool
+isDerivedFaceOf (Face xs) (Face ys) = isSublistOf xs ys
+
+-- | returns the face in the graph g that "comes from" f where we're thinking of
+-- f as being a face in a previous doubling and the graph g as being a doubling
+-- of the og graph
+derivedFace :: Face -> Graph -> Face
+derivedFace f g = snd $ head theBface
+  where faces = pgFaces g
+        bFaces = zip (map (f `isDerivedFaceOf`) faces) faces
+        theBface = filter fst bFaces
+
+
+-- | Given a list of faces of a pg, produces the pg obtained by successively
+-- doubling along the faces derived from those in the list.
+doublingSeq :: Graph -> [Face] -> Graph
+doublingSeq g [] = g
+doublingSeq g (f:fs) = doublingSeq (doublePG g df) fs
+  where df = derivedFace f g
 
 
 -- DRAWING
