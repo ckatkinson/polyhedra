@@ -20,7 +20,6 @@ module Planar
     , octahedron
     , gvGraph
     , drawOut
-    , oc
     , doublings
     ) where
 
@@ -57,15 +56,6 @@ newtype PlanarGraph a = PG {
 type Edge = (Vertex, Vertex)
 type GvEdge = (Vertex, Vertex, ())
 
-mmaEdge :: Edge -> String
-mmaEdge e = "{" ++ show (fst e) ++ "," ++ show (snd e) ++ "}"
-
-mkMma :: Graph -> IO ()
---mkMma pg = putStrLn $ "Graph[Rule @@@ {" ++ edgs ++ "}, GraphLayout -> \"PlanarEmbedding\"]"
-mkMma pg = putStrLn $ beg ++ edgs ++ finish
-  where edgs = intercalate "," (map mmaEdge $ pgEdges pg)
-        beg = "PlanarGraph[{"
-        finish = "}, VertexLabels -> \"Name\"]"
 
 instance Functor PlanarGraph where
   fmap f (PG ls) = PG (map (fmap f) ls)
@@ -146,8 +136,6 @@ pgEdges pg = concatMap (\v -> [(v, w) | w <- linkBigger v]) pgVerts
           linkBigger :: Vertex -> [Vertex]
           linkBigger v = filter ( > v) (linkVertices $ getLinkOf v pg)
 
-mkGvEdge :: Edge -> GvEdge
-mkGvEdge (v,w) = (v,w,())
 
 
 -- FACE stuff
@@ -174,6 +162,24 @@ faceLeftOf v1 v2 pg = faceLeftOf' v1 v2 pg []
 -- | Returns all faces incident to the vertex v in pg.
 findFacesAtV :: Vertex -> Graph -> [Face]
 findFacesAtV v pg = [ faceLeftOf v v2 pg | v2<-linkVertices $ getLinkOf v pg ]
+
+
+-- | Returns all faces adjacent to f in pg
+adjacentFaces :: Face -> Graph -> [Face]
+adjacentFaces f pg =  filter 
+                      (\fa -> length (fvertices fa `intersect` fvertices f) > 1) $
+                      delete f $
+                      nub $ concat [findFacesAtV v pg | v <- fvertices f]
+
+-- | I think this works????
+mod2FaceDistance :: Face -> Face -> Graph -> Integer
+mod2FaceDistance f1 f2 pg
+  | f1 == f2                     = 0
+  | f2 `elem` adjacentFaces f1 pg = 1
+  | otherwise                    = head (map (\f -> 1 + mod2FaceDistance f1 f pg)
+                                             (delete f1 (adjacentFaces f2 pg))) `mod` 2
+
+-- fvertices :: Face -> [Vertex]
 
 -- | Returns a list of all faces of the PG
 pgFaces :: Graph -> [Face]
@@ -331,19 +337,31 @@ doublingSeq g (f:fs) = doublingSeq (doublePG g df) fs
 -- satisfying the condition that whenever f1 and f2 are adjacent, 
 -- color f1 /= color f2.
 --
--- I'll want ColoredGraph to be a functor so that I can apply doublePG in a way
--- where I recompute the color function for the doubled one.
 
-data FaceColor = White | Black deriving (Show, Eq)
+data FaceColor = Wh | Bl deriving (Show, Eq)
 
-data ColoredGraph a = CG 
-                       { planarGraph :: PlanarGraph a
+data ColoredGraph = CG 
+                       { planarGraph :: Graph
                        , coloring    :: Face -> FaceColor
                        }
 
+-- Produce a colored graph from a graph with a seed face (the seed will be
+-- colored Wh
+colorPGSeed :: Graph -> Face -> ColoredGraph
+colorPGSeed gr seed = CG gr colorFun 
+  where 
+    colorFun f 
+      | mod2FaceDistance f seed gr == 0 = Wh
+      | otherwise                       = Bl
+
+
 -- DRAWING
 
--- make the graph
+-- make the graph (This is the graphViz code. Doesn't seem to do a good job with
+-- planarity. Below is code to produce Mathematica input. Works much better!
+--
+mkGvEdge :: Edge -> GvEdge
+mkGvEdge (v,w) = (v,w,())
 
 gvGraph :: Planar.Graph -> Data.Graph.Inductive.PatriciaTree.Gr Vertex ()
 gvGraph pg = mkGraph (pgVertices pg) (map mkGvEdge (pgEdges pg))
@@ -361,8 +379,18 @@ drawOut pg = do
                      gr'
   mainWith $ grDrawing # frame 1
 
-oc :: IO ()
-oc = drawOut octahedron
+-- Mathematica version. When compiling, it's convenient to write a main function
+-- so that you can just pipe this into pbcopy.
+
+mmaEdge :: Edge -> String
+mmaEdge e = "{" ++ show (fst e) ++ "," ++ show (snd e) ++ "}"
+
+mkMma :: Graph -> IO ()
+--mkMma pg = putStrLn $ "Graph[Rule @@@ {" ++ edgs ++ "}, GraphLayout -> \"PlanarEmbedding\"]"
+mkMma pg = putStrLn $ beg ++ edgs ++ finish
+  where edgs = intercalate "," (map mmaEdge $ pgEdges pg)
+        beg = "PlanarGraph[{"
+        finish = "}, VertexLabels -> \"Name\"]"
 
 
 -- Examples below
