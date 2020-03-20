@@ -345,6 +345,9 @@ data ColoredGraph = CG
                        , coloring    :: Face -> FaceColor
                        }
 
+instance Show ColoredGraph where
+  show (CG gr col) = show [(f, col f) | f <- pgFaces gr]
+
 -- Produce a colored graph from a graph with a seed face (the seed will be
 -- colored Wh
 colorPGSeed :: Graph -> Face -> ColoredGraph
@@ -354,11 +357,18 @@ colorPGSeed gr seed = CG gr colorFun
       | mod2FaceDistance f seed gr == 0 = Wh
       | otherwise                       = Bl
 
+-- Girao co-final tower construction:
+-- Plan:
+--  1) Given initial polyhedron, 2-color it. Use the 2-coloring to choose the
+--  correct sequence of faces along which to double
+--  2) use the sequence doubler to double along the selected faces
+--  3) recolor and repeat.
+
 
 -- DRAWING
 
--- make the graph (This is the graphViz code. Doesn't seem to do a good job with
--- planarity. Below is code to produce Mathematica input. Works much better!
+-- make the graph Below is the graphViz code. Doesn't seem to do a good job with
+-- planarity. Futher below is code to produce Mathematica input. Works much better!
 --
 mkGvEdge :: Edge -> GvEdge
 mkGvEdge (v,w) = (v,w,())
