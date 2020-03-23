@@ -171,15 +171,18 @@ adjacentFaces f pg =  filter
                       delete f $
                       nub $ concat [findFacesAtV v pg | v <- fvertices f]
 
--- | I think this works????
+-- | Returns the mod2 distance between faces in the dual graph of planar graph.
+-- I'm using mod2 because I only care about this for coloring. Removes the need
+-- to minimize.
 mod2FaceDistance :: Face -> Face -> Graph -> Integer
-mod2FaceDistance f1 f2 pg
-  | f1 == f2                     = 0
-  | f2 `elem` adjacentFaces f1 pg = 1
-  | otherwise                    = head (map (\f -> 1 + mod2FaceDistance f1 f pg)
-                                             (delete f1 (adjacentFaces f2 pg))) `mod` 2
+mod2FaceDistance f1 f2 pg = m2fd f1 f2 pg []
+  where 
+  m2fd ff1 ff2 ppg vvisited 
+    | ff1 == ff2                     = 0
+    | ff2 `elem` adjacentFaces ff1 ppg = 1
+    | otherwise             = (1 + m2fd ff1 f ppg (f : vvisited)) `mod` 2
+      where f = head $ adjacentFaces ff2 ppg \\ vvisited
 
--- fvertices :: Face -> [Vertex]
 
 -- | Returns a list of all faces of the PG
 pgFaces :: Graph -> [Face]
@@ -364,6 +367,14 @@ colorPGSeed gr seed = CG gr colorFun
 --  2) use the sequence doubler to double along the selected faces
 --  3) recolor and repeat.
 
+
+interleaveLists :: [[a]] -> [a]
+interleaveLists = concat . transpose
+
+partitionFaces :: ColoredGraph -> ([Face], [Face])
+partitionFaces cg = partition isWhite faces
+  where faces = pgFaces $ planarGraph cg
+        isWhite f = coloring cg f == Wh
 
 -- DRAWING
 
