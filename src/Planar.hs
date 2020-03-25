@@ -26,6 +26,7 @@ module Planar
 import Data.List
 import Data.List.Split (splitOneOf)
 import Data.Maybe
+import qualified Data.Set as S
 
 import Diagrams.Backend.SVG.CmdLine
 import Diagrams.Prelude
@@ -174,14 +175,26 @@ adjacentFaces f pg =  filter
 -- | Returns the mod2 distance between faces in the dual graph of planar graph.
 -- I'm using mod2 because I only care about this for coloring. Removes the need
 -- to minimize.
+--
+-- One more issue: The "head" is sometimes taken of an empty list... How to deal
+-- with this!?
+-- mod2FaceDistance'' :: Face -> Face -> Graph -> Integer
+-- mod2FaceDistance'' f1 f2 pg = m2fd f1 f2 pg []
+  -- where
+  -- m2fd ff1 ff2 ppg vvisited
+    -- | ff1 == ff2                     = 0
+    -- | ff2 `elem` adjacentFaces ff1 ppg = 1
+    -- | otherwise             = (1 + m2fd ff1 f ppg (ff2 : vvisited)) `mod` 2
+      -- where f = head $ adjacentFaces ff2 ppg \\ vvisited
+
 mod2FaceDistance :: Face -> Face -> Graph -> Integer
-mod2FaceDistance f1 f2 pg = m2fd f1 f2 pg []
-  where 
-  m2fd ff1 ff2 ppg vvisited 
-    | ff1 == ff2                     = 0
-    | ff2 `elem` adjacentFaces ff1 ppg = 1
-    | otherwise             = (1 + m2fd ff1 f ppg (f : vvisited)) `mod` 2
-      where f = head $ adjacentFaces ff2 ppg \\ vvisited
+mod2FaceDistance fsource ftarget pg = mod2FaceDistance' fsource ftarget pg [fsource]
+  where
+    mod2FaceDistance' fs ft g seen
+      | ft `elem` seen = 0
+      | otherwise = 1 + mod2FaceDistance' fs ft g newSeen
+        where newSeen = nub $ seen ++
+                          concatMap (`adjacentFaces` g) seen
 
 
 -- | Returns a list of all faces of the PG
@@ -376,6 +389,17 @@ partitionFaces cg = partition isWhite faces
   where faces = pgFaces $ planarGraph cg
         isWhite f = coloring cg f == Wh
 
+oneStepGiraoSeq :: ColoredGraph -> [Face]
+oneStepGiraoSeq cg = interleaveLists $ listify $ partitionFaces cg
+  where listify pair = [fst pair, snd pair]
+
+oneStepGiraoDoublings :: Graph -> Graph
+oneStepGiraoDoublings gr = doublingSeq gr faces
+  where faces = oneStepGiraoSeq (colorPGSeed gr (head $ pgFaces gr))
+
+
+-- doublingSeq :: Graph -> [Face] -> Graph
+
 -- DRAWING
 
 -- make the graph Below is the graphViz code. Doesn't seem to do a good job with
@@ -452,6 +476,19 @@ octahedron = PG [Link (1, [2, 5, 6, 3]),
                  Link (5, [1 ,2 ,4 ,6]),
                  Link (6, [1 ,5 ,4 ,3])]
 
+fiveDrum :: Graph
+fiveDrum = PG [Link (1, [3, 9, 10, 2]),
+               Link (3, [5, 1, 2, 4]),
+               Link (5, [7, 3, 4, 6]),
+               Link (7, [9, 5, 6, 8]),
+               Link (9, [1, 7, 8, 10]),
+               Link (2, [3, 1, 10, 4]),
+               Link (4, [5, 3, 2, 6]),
+               Link (6, [7, 5, 4, 8]),
+               Link (8, [9, 7, 6, 10]),
+               Link (10, [1, 9, 8, 2])]
+              
+
 doublings :: IO ()
 doublings = do mkMma octahedron
                let doct = doublePG octahedron (Face [6,5,4])
@@ -462,6 +499,10 @@ doublings = do mkMma octahedron
                mkMma dddoct
                let d4oct = doublePG dddoct (Face [1,2,3,20])
                mkMma d4oct
+               let d5oct = oneStepGiraoDoublings octahedron
+               mkMma d5oct
+               let drummy = oneStepGiraoDoublings fiveDrum
+               mkMma drummy
 
 
 
