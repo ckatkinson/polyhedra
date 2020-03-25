@@ -27,6 +27,8 @@ import Data.List
 import Data.List.Split (splitOneOf)
 import Data.Maybe
 import qualified Data.Set as S
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 
 import Diagrams.Backend.SVG.CmdLine
 import Diagrams.Prelude
@@ -172,6 +174,9 @@ adjacentFaces f pg =  filter
                       delete f $
                       nub $ concat [findFacesAtV v pg | v <- fvertices f]
 
+adjacentFacesSet :: Face -> Graph -> S.Set Face
+adjacentFacesSet f pg = S.fromList $ adjacentFaces f pg 
+
 -- | Returns the mod2 distance between faces in the dual graph of planar graph.
 -- I'm using mod2 because I only care about this for coloring. Removes the need
 -- to minimize.
@@ -188,13 +193,14 @@ adjacentFaces f pg =  filter
       -- where f = head $ adjacentFaces ff2 ppg \\ vvisited
 
 mod2FaceDistance :: Face -> Face -> Graph -> Integer
-mod2FaceDistance fsource ftarget pg = mod2FaceDistance' fsource ftarget pg [fsource]
+mod2FaceDistance fsource ftarget pg = mod2FaceDistance' fsource ftarget pg (S.fromList [fsource])
   where
     mod2FaceDistance' fs ft g seen
-      | ft `elem` seen = 0
-      | otherwise = 1 + mod2FaceDistance' fs ft g newSeen
-        where newSeen = nub $ seen ++
-                          concatMap (`adjacentFaces` g) seen
+      | ft `S.member` seen = 0
+      | otherwise = (1 + mod2FaceDistance' fs ft g newSeen) `mod` 2
+        where diskSeen = S.union seen $
+                          S.unions $ S.map (`adjacentFacesSet` g) seen
+              newSeen = S.difference diskSeen seen
 
 
 -- | Returns a list of all faces of the PG
@@ -356,20 +362,27 @@ doublingSeq g (f:fs) = doublingSeq (doublePG g df) fs
 
 data FaceColor = Wh | Bl deriving (Show, Eq)
 
+-- data ColoredGraph = CG
+                       -- { planarGraph :: !Graph
+                       -- , coloring    :: Face -> FaceColor
+                       -- }
 data ColoredGraph = CG 
-                       { planarGraph :: Graph
-                       , coloring    :: Face -> FaceColor
+                       { planarGraph :: !Graph
+                       , coloring    :: Map Face FaceColor
                        }
 
+
 instance Show ColoredGraph where
-  show (CG gr col) = show [(f, col f) | f <- pgFaces gr]
+  show (CG gr col) = show [(f, c f) | f <- pgFaces gr]
+    where c f = fromJust $ Map.lookup f col
 
 -- Produce a colored graph from a graph with a seed face (the seed will be
 -- colored Wh
 colorPGSeed :: Graph -> Face -> ColoredGraph
-colorPGSeed gr seed = CG gr colorFun 
+colorPGSeed gr seed = CG gr colorMap
   where 
-    colorFun f 
+    colorMap = Map.fromList [(f,c f) | f <- pgFaces gr] 
+    c f 
       | mod2FaceDistance f seed gr == 0 = Wh
       | otherwise                       = Bl
 
@@ -387,7 +400,7 @@ interleaveLists = concat . transpose
 partitionFaces :: ColoredGraph -> ([Face], [Face])
 partitionFaces cg = partition isWhite faces
   where faces = pgFaces $ planarGraph cg
-        isWhite f = coloring cg f == Wh
+        isWhite f = fromJust (Map.lookup f (coloring cg)) == Wh
 
 oneStepGiraoSeq :: ColoredGraph -> [Face]
 oneStepGiraoSeq cg = interleaveLists $ listify $ partitionFaces cg
