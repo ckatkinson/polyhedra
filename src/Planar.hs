@@ -503,19 +503,25 @@ fiveDrum = PG [Link (1, [3, 9, 10, 2]),
               
 
 doublings :: IO ()
-doublings = do mkMma octahedron
-               let doct = doublePG octahedron (Face [6,5,4])
-               mkMma doct
-               let ddoct = doublePG doct (Face [2,4,8,5])
-               mkMma ddoct
-               let dddoct = doublePG ddoct (Face [1,3,6])
-               mkMma dddoct
-               let d4oct = doublePG dddoct (Face [1,2,3,20])
-               mkMma d4oct
-               let d5oct = oneStepGiraoDoublings octahedron
-               mkMma d5oct
-               let drummy = oneStepGiraoDoublings fiveDrum
-               mkMma drummy
+doublings = do let girao = iterate oneStepGiraoDoublings octahedron
+               let ngirao = map numFaces girao
+               print $ take 2 ngirao
+               let octs = iterate (\p -> doublePG p (head $ pgFaces p)) octahedron
+               let nocts = map numFaces octs
+               print $ take 20 nocts
+-- doublings = do mkMma octahedron
+               -- let doct = doublePG octahedron (Face [6,5,4])
+               -- mkMma doct
+               -- let ddoct = doublePG doct (Face [2,4,8,5])
+               -- mkMma ddoct
+               -- let dddoct = doublePG ddoct (Face [1,3,6])
+               -- mkMma dddoct
+               -- let d4oct = doublePG dddoct (Face [1,2,3,20])
+               -- mkMma d4oct
+               -- let d5oct = oneStepGiraoDoublings octahedron
+               -- mkMma d5oct
+               -- let drummy = oneStepGiraoDoublings fiveDrum
+               -- mkMma drummy
 
 
 
