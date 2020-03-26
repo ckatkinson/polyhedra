@@ -181,16 +181,8 @@ adjacentFacesSet f pg = S.fromList $ adjacentFaces f pg
 -- I'm using mod2 because I only care about this for coloring. Removes the need
 -- to minimize.
 --
--- One more issue: The "head" is sometimes taken of an empty list... How to deal
--- with this!?
--- mod2FaceDistance'' :: Face -> Face -> Graph -> Integer
--- mod2FaceDistance'' f1 f2 pg = m2fd f1 f2 pg []
-  -- where
-  -- m2fd ff1 ff2 ppg vvisited
-    -- | ff1 == ff2                     = 0
-    -- | ff2 `elem` adjacentFaces ff1 ppg = 1
-    -- | otherwise             = (1 + m2fd ff1 f ppg (ff2 : vvisited)) `mod` 2
-      -- where f = head $ adjacentFaces ff2 ppg \\ vvisited
+-- Essentially, this is a scan starting from the source face, expanding an
+-- annular region of faces until one finds the target face.
 
 mod2FaceDistance :: Face -> Face -> Graph -> Integer
 mod2FaceDistance fsource ftarget pg = mod2FaceDistance' fsource ftarget pg (S.fromList [fsource])
