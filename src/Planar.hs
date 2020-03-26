@@ -26,6 +26,7 @@ module Planar
 import Data.List
 import Data.List.Split (splitOneOf)
 import Data.Maybe
+import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -370,13 +371,44 @@ instance Show ColoredGraph where
 
 -- Produce a colored graph from a graph with a seed face (the seed will be
 -- colored Wh
-colorPGSeed :: Graph -> Face -> ColoredGraph
-colorPGSeed gr seed = CG gr colorMap
+--
+-- Can I improve this? Once I add the seed to the map, for each face adjacent to
+-- the seed, use reverse color. Can I just traverse the graph as in the
+-- mod2distance, coloring as I go? This would remove the need to compute the
+-- mod2distance for every face (a very expensive process)...
+--
+colorPGSeed' :: Graph -> Face -> ColoredGraph
+colorPGSeed' gr seed = CG gr colorMap
   where 
     colorMap = Map.fromList [(f,c f) | f <- pgFaces gr] 
     c f 
       | mod2FaceDistance f seed gr == 0 = Wh
       | otherwise                       = Bl
+
+colorPGSeed :: Graph -> Face -> ColoredGraph
+colorPGSeed gr seed = colorPGSeed'' gr initFaces initMap Wh
+  where 
+    initFaces = S.difference (S.fromList (pgFaces gr)) (S.singleton seed)
+    initMap = Map.fromList [(seed, Wh)]
+    colorPGSeed'' :: Graph -> Set Face -> Map Face FaceColor -> FaceColor -> ColoredGraph
+    colorPGSeed'' gg facesRemaining colors lastColor
+      | S.null facesRemaining = CG gg colors
+      | otherwise             = colorPGSeed'' gg 
+                                              (S.difference facesRemaining newAnnulus)
+                                              (Map.union colors newColors)
+                                              (nextColor lastColor)
+      -- color everything in newAnnulus. Remove everything in newAnnulus from facesRemaining
+      where coloredFaces = Map.keysSet colors
+            newAnnulus = S.difference withAdjacent coloredFaces
+            withAdjacent = S.union coloredFaces $
+                             S.unions $ S.map (`adjacentFacesSet` gg) coloredFaces
+            nextColor Wh = Bl
+            nextColor Bl = Wh
+            newColors = Map.fromSet (const (nextColor lastColor)) newAnnulus
+
+-- Map.fromSet :: (k -> a) -> Set k -> Map k a
+-- Map.insert :: Ord k => k -> a -> Map k a -> Map k a
+
 
 -- Girao co-final tower construction:
 -- Plan:
@@ -497,10 +529,10 @@ fiveDrum = PG [Link (1, [3, 9, 10, 2]),
 doublings :: IO ()
 doublings = do let girao = iterate oneStepGiraoDoublings octahedron
                let ngirao = map numFaces girao
-               print $ take 2 ngirao
-               let octs = iterate (\p -> doublePG p (head $ pgFaces p)) octahedron
-               let nocts = map numFaces octs
-               print $ take 20 nocts
+               print $ take 3 ngirao
+               -- let octs = iterate (\p -> doublePG p (head $ pgFaces p)) octahedron
+               -- let nocts = map numFaces octs
+               -- print $ take 20 nocts
 -- doublings = do mkMma octahedron
                -- let doct = doublePG octahedron (Face [6,5,4])
                -- mkMma doct
