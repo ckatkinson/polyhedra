@@ -377,7 +377,8 @@ instance Show ColoredGraph where
 -- mod2distance, coloring as I go? This would remove the need to compute the
 -- mod2distance for every face (a very expensive process)...
 --
-colorPGSeed' :: Graph -> Face -> ColoredGraph
+--I did it. See the unprimed version below. Doesn't seem to be fast enough.
+
 colorPGSeed' gr seed = CG gr colorMap
   where 
     colorMap = Map.fromList [(f,c f) | f <- pgFaces gr] 
@@ -405,9 +406,6 @@ colorPGSeed gr seed = colorPGSeed'' gr initFaces initMap Wh
             nextColor Wh = Bl
             nextColor Bl = Wh
             newColors = Map.fromSet (const (nextColor lastColor)) newAnnulus
-
--- Map.fromSet :: (k -> a) -> Set k -> Map k a
--- Map.insert :: Ord k => k -> a -> Map k a -> Map k a
 
 
 -- Girao co-final tower construction:
