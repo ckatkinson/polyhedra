@@ -178,22 +178,6 @@ adjacentFaces f pg =  filter
 adjacentFacesSet :: Face -> Graph -> S.Set Face
 adjacentFacesSet f pg = S.fromList $ adjacentFaces f pg 
 
--- | Returns the mod2 distance between faces in the dual graph of planar graph.
--- I'm using mod2 because I only care about this for coloring. Removes the need
--- to minimize.
---
--- Essentially, this is a scan starting from the source face, expanding an
--- annular region of faces until one finds the target face.
-
-mod2FaceDistance :: Face -> Face -> Graph -> Integer
-mod2FaceDistance fsource ftarget pg = mod2FaceDistance' fsource ftarget pg (S.fromList [fsource])
-  where
-    mod2FaceDistance' fs ft g seen
-      | ft `S.member` seen = 0
-      | otherwise = (1 + mod2FaceDistance' fs ft g newSeen) `mod` 2
-        where diskSeen = S.union seen $
-                          S.unions $ S.map (`adjacentFacesSet` g) seen
-              newSeen = S.difference diskSeen seen
 
 
 -- | Returns a list of all faces of the PG
@@ -375,6 +359,22 @@ data ColoredGraph = CG
 instance Show ColoredGraph where
   show (CG gr col) = show [(f, c f) | f <- pgFaces gr]
     where c f = fromJust $ Map.lookup f col
+-- | Returns the mod2 distance between faces in the dual graph of planar graph.
+-- I'm using mod2 because I only care about this for coloring. Removes the need
+-- to minimize.
+--
+-- Essentially, this is a scan starting from the source face, expanding an
+-- annular region of faces until one finds the target face.
+
+mod2FaceDistance :: Face -> Face -> Graph -> Integer
+mod2FaceDistance fsource ftarget pg = mod2FaceDistance' fsource ftarget pg (S.fromList [fsource])
+  where
+    mod2FaceDistance' fs ft g seen
+      | ft `S.member` seen = 0
+      | otherwise = (1 + mod2FaceDistance' fs ft g newSeen) `mod` 2
+        where diskSeen = S.union seen $
+                          S.unions $ S.map (`adjacentFacesSet` g) seen
+              newSeen = S.difference diskSeen seen
 
 -- Produce a colored graph from a graph with a seed face (the seed will be
 -- colored Wh
@@ -384,7 +384,11 @@ instance Show ColoredGraph where
 -- mod2distance, coloring as I go? This would remove the need to compute the
 -- mod2distance for every face (a very expensive process)...
 --
---I did it. See the unprimed version below. Doesn't seem to be fast enough.
+--
+-- Hmmm. It seems that either doubling or adjacentFaces isn't working correctly. Look at the
+-- polyhedron `oneStepGiraoDoublings octahedron`. Calling 
+-- `adjacentFaces (Face [96,83,95])` gives back only two faces.
+--
 
 colorPGSeed' gr seed = CG gr colorMap
   where 
