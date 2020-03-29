@@ -388,7 +388,10 @@ mod2FaceDistance fsource ftarget pg = mod2FaceDistance' fsource ftarget pg (S.fr
 -- Hmmm. It seems that either doubling or adjacentFaces isn't working correctly. Look at the
 -- polyhedron `oneStepGiraoDoublings octahedron`. Calling 
 -- `adjacentFaces (Face [96,83,95])` gives back only two faces.
---
+-- 
+-- IT's something about reindexing. If I reindexPG doct, then the coloring
+-- function actually succeeds! The problem is that if I don't reindex, it seems
+-- that some non-faces are hanging around. IDK. Don't understand.
 
 colorPGSeed' gr seed = CG gr colorMap
   where 
