@@ -341,6 +341,13 @@ doublingSeq g [] = g
 doublingSeq g (f:fs) = doublingSeq (doublePG g df) fs
   where df = derivedFace f g
 
+-- | Gives sequence of face numbers of graphs obtained by doubling along faces
+-- in the list of faces.
+faceSeq :: Graph -> [Face] -> [Int]
+faceSeq g [] = [numFaces g]
+faceSeq g (f:fs) = numFaces doubg : faceSeq doubg fs
+  where df = derivedFace f g
+        doubg = doublePG g df
 
 -- TODO Goal: I want to automate the selection of faces. Girao's paper uses an
 -- alternating black/white sequence of faces (these are right-angled ideal, so
@@ -511,6 +518,8 @@ octahedron = PG [Link (1, [2, 5, 6, 3]),
                  Link (5, [1 ,2 ,4 ,6]),
                  Link (6, [1 ,5 ,4 ,3])]
 
+coctahedron = colorPGSeed octahedron (Face [1,2,3])
+
 fiveDrum :: Graph
 fiveDrum = PG [Link (1, [3, 9, 10, 2]),
                Link (3, [5, 1, 2, 4]),
@@ -525,9 +534,9 @@ fiveDrum = PG [Link (1, [3, 9, 10, 2]),
               
 
 doublings :: IO ()
-doublings = do let girao = iterate oneStepGiraoDoublings octahedron
-               let ngirao = map numFaces girao
-               print $ take 3 ngirao
+doublings = do -- let girao = iterate oneStepGiraoDoublings octahedron
+               -- let ngirao = map numFaces girao
+               -- print $ take 3 ngirao
                -- let octs = iterate (\p -> doublePG p (head $ pgFaces p)) octahedron
                -- let nocts = map numFaces octs
                -- print $ take 20 nocts
@@ -540,8 +549,8 @@ doublings = do let girao = iterate oneStepGiraoDoublings octahedron
                -- mkMma dddoct
                -- let d4oct = doublePG dddoct (Face [1,2,3,20])
                -- mkMma d4oct
-               -- let d5oct = oneStepGiraoDoublings octahedron
-               -- mkMma d5oct
+               let d5oct = oneStepGiraoDoublings octahedron
+               mkMma d5oct
                -- let drummy = oneStepGiraoDoublings fiveDrum
                -- mkMma drummy
 
