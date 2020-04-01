@@ -36,8 +36,6 @@ import Diagrams.Prelude
 import Diagrams.TwoD.GraphViz
 
 import Data.GraphViz
--- import Data.GraphViz.Attributes.Complete
--- import Data.GraphViz.Commands
 import Data.Graph.Inductive.PatriciaTree
 
 -- Plan: I want to encode a planar embedding of a graph. The idea is to use the
@@ -48,8 +46,7 @@ import Data.Graph.Inductive.PatriciaTree
 --  2) a specification of the bounding cycle.
 -- There are probably better data structures to use, but I'm just going to start
 -- with using lists to represent these. (Two that seem likely: Data.CircularList
--- and Data.List.PointedList. Adding to the project is proving to be a major
--- headache right now. Just want proof of concept)
+-- and Data.List.PointedList.)
 
 
 type Vertex           = Int
@@ -112,7 +109,6 @@ linkVertices (Link (_, vs)) = vs
 linkValence :: Link Vertex -> Int
 linkValence = length . linkVertices
 
-
 -- | Move right in the link:
 moveRight :: Vertex      -> -- ^ Current vertex in link
              Link Vertex -> -- ^ Link we're working in
@@ -140,8 +136,6 @@ pgEdges pg = concatMap (\v -> [(v, w) | w <- linkBigger v]) pgVerts
           linkBigger :: Vertex -> [Vertex]
           linkBigger v = filter ( > v) (linkVertices $ getLinkOf v pg)
 
-
-
 -- FACE stuff
 
 
@@ -161,7 +155,7 @@ faceLeftOf v1 v2 pg = faceLeftOf' v1 v2 pg []
                                               pg'
                                               (v1':acc)
           where linkv2   = getLinkOf v2' pg
-                nextVert = moveRight v1' linkv2 -- Careful here!
+                nextVert = moveRight v1' linkv2
 
 -- | Returns all faces incident to the vertex v in pg.
 findFacesAtV :: Vertex -> Graph -> [Face]
@@ -175,6 +169,7 @@ adjacentFaces f pg =  filter
                       delete f $
                       nub $ concat [findFacesAtV v pg | v <- fvertices f]
 
+-- | Returns as set of all faces adjacent to f in pg
 adjacentFacesSet :: Face -> Graph -> S.Set Face
 adjacentFacesSet f pg = S.fromList $ adjacentFaces f pg 
 
@@ -189,7 +184,7 @@ pgFaces pg = nub faces -- This is likely slow. Could consider a set here.
 numFaces :: Graph -> Int
 numFaces = length . pgFaces
 
-
+-- | Shifts indices of vertices in the link l by n
 shiftLink :: Int -> Link Vertex -> Link Vertex
 shiftLink n l = (n+) <$> l
 
@@ -209,19 +204,8 @@ linkOfFace face pg = [ l | l<-links pg,
                            linkVertex l `notElem` fvertices face,
                            any (\v -> v `elem` linkVertices l) (fvertices face) ] 
 
-
-
-
-
--- TODO (MAJOR TODO). Test this carefully.
--- I think that the reindexing was only for trivalent vertices or something. For
--- now, it seems to be acting more predictably without it. Testing on Octahedron
--- right now...
---
--- Ok, going further into doubling, it seems that there are vertex numbers that
--- get skipped. It doesn't affect anything. The nice thing about NOT reindexing
--- is that vertices retain their "identity" upon doubling with new vertex
--- numbers only being introduced for "new" vertices.
+-- | Doubles right-angled polyhedron pg along the face f. Works for polyhedra
+-- having degree 3 and 4 vertices. 
 doublePG :: Graph -> Face -> Graph
 --doublePG pg f = reindexPG $ PG ( concatMap (makeLinks pg f) (links pg)) 
 doublePG pg f = PG ( concatMap (makeLinks pg f) (links pg)) 
@@ -286,9 +270,7 @@ fuseLink l f pg = Link (linkVertex l, lPieces ++ rlPieces)
        lPieces = head $ filter (not . null) $ splitOneOf teleporters (faceHead lVerts fVerts)
        rlPieces = head $ filter (not . null) $ splitOneOf teleporters (faceHead rlVerts rfVerts)
 
--- Even better for simplicity: Rotate so that the face vertices are are at
--- head/last
-
+-- | Rotate list so that a given sublist is the beginning.
 faceHead :: Eq a => [a] -> -- input list
                     [a] -> -- what should be at the front
                     [a]
@@ -298,13 +280,14 @@ faceHead inp frt
   | otherwise           = faceHead (tail inp ++ [head inp]) frt
 
 
--- More functionality
+-- | Check of a list is a sublist of another.
 isSublistOf :: Eq a => [a] -> [a] -> Bool
 isSublistOf [] _      = True
 isSublistOf (x:xs) ys  
   | x `elem` ys = isSublistOf xs ys
   | otherwise   = False
 
+-- | Check of a face of xs doubles to a face of ys
 isDerivedFaceOf :: Face -> Face -> Bool
 isDerivedFaceOf (Face xs) (Face ys) = isSublistOf xs ys
 
@@ -346,10 +329,6 @@ faceSeq g (f:fs) = numFaces doubg : faceSeq doubg fs
 
 data FaceColor = Wh | Bl deriving (Show, Eq)
 
--- data ColoredGraph = CG
-                       -- { planarGraph :: !Graph
-                       -- , coloring    :: Face -> FaceColor
-                       -- }
 data ColoredGraph = CG 
                        { planarGraph :: !Graph
                        , coloring    :: Map Face FaceColor
@@ -359,6 +338,7 @@ data ColoredGraph = CG
 instance Show ColoredGraph where
   show (CG gr col) = show [(f, c f) | f <- pgFaces gr]
     where c f = fromJust $ Map.lookup f col
+
 -- | Returns the mod2 distance between faces in the dual graph of planar graph.
 -- I'm using mod2 because I only care about this for coloring. Removes the need
 -- to minimize.
@@ -377,21 +357,8 @@ mod2FaceDistance fsource ftarget pg = mod2FaceDistance' fsource ftarget pg (S.fr
               newSeen = S.difference diskSeen seen
 
 -- Produce a colored graph from a graph with a seed face (the seed will be
--- colored Wh
+-- colored Wh. Unprimed version is the best one.
 --
--- Can I improve this? Once I add the seed to the map, for each face adjacent to
--- the seed, use reverse color. Can I just traverse the graph as in the
--- mod2distance, coloring as I go? This would remove the need to compute the
--- mod2distance for every face (a very expensive process)...
---
---
--- Hmmm. It seems that either doubling or adjacentFaces isn't working correctly. Look at the
--- polyhedron `oneStepGiraoDoublings octahedron`. Calling 
--- `adjacentFaces (Face [96,83,95])` gives back only two faces.
--- 
--- IT's something about reindexing. If I reindexPG doct, then the coloring
--- function actually succeeds! The problem is that if I don't reindex, it seems
--- that some non-faces are hanging around. IDK. Don't understand.
 
 colorPGSeed' gr seed = CG gr colorMap
   where 
@@ -442,12 +409,19 @@ oneStepGiraoSeq :: ColoredGraph -> [Face]
 oneStepGiraoSeq cg = interleaveLists $ listify $ partitionFaces cg
   where listify pair = [fst pair, snd pair]
 
+giraoSeq :: ColoredGraph -> [Face]
+giraoSeq cg = oneStepGiraoSeq cg ++ giraoSeq cog
+  where cog = colorPGSeed os (head $ pgFaces os)
+        os = oneStepGiraoDoublings (planarGraph cg)
+
+giraoNumFaceSeq :: Graph -> [Int]
+giraoNumFaceSeq gr = faceSeq gr $ giraoSeq cgr
+  where cgr = colorPGSeed gr (head $ pgFaces gr)
+
+
 oneStepGiraoDoublings :: Graph -> Graph
 oneStepGiraoDoublings gr = doublingSeq gr faces
   where faces = oneStepGiraoSeq (colorPGSeed gr (head $ pgFaces gr))
-
-
--- doublingSeq :: Graph -> [Face] -> Graph
 
 -- DRAWING
 
@@ -538,6 +512,8 @@ fiveDrum = PG [Link (1, [3, 9, 10, 2]),
                Link (6, [7, 5, 4, 8]),
                Link (8, [9, 7, 6, 10]),
                Link (10, [1, 9, 8, 2])]
+
+cFiveDrum = colorPGSeed fiveDrum (head $ pgFaces fiveDrum)
               
 
 doublings :: IO ()
@@ -557,7 +533,9 @@ doublings = do -- let girao = iterate oneStepGiraoDoublings octahedron
                -- let d4oct = doublePG dddoct (Face [1,2,3,20])
                -- mkMma d4oct
                let d5oct = oneStepGiraoDoublings octahedron
-               mkMma d5oct
+               let d6oct = oneStepGiraoDoublings d5oct
+               mkMma d6oct
+               -- mkMma d5oct
                -- let drummy = oneStepGiraoDoublings fiveDrum
                -- mkMma drummy
 
