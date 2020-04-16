@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
--- {-# OPTIONS -Wno-unused-top-binds #-}
+{-# OPTIONS -Wno-unused-top-binds #-}
 
 module Planar
     ( moveRight
@@ -179,6 +179,10 @@ adjacentFacesSet f pg = S.fromList $ adjacentFaces f pg
 pgFaces :: Graph -> [Face]
 pgFaces pg = nub faces -- This is likely slow. Could consider a set here.
   where faces = concat [findFacesAtV v pg | v<-pgVertices pg ]
+
+-- | Maximum degree of a face
+maxFaceDegree :: Graph -> Int
+maxFaceDegree g = maximum $ map (length . fvertices) (pgFaces g)
 
 -- | Returns the number of faces of the PG
 numFaces :: Graph -> Int
@@ -532,12 +536,12 @@ doublings = do -- let girao = iterate oneStepGiraoDoublings octahedron
                -- mkMma dddoct
                -- let d4oct = doublePG dddoct (Face [1,2,3,20])
                -- mkMma d4oct
-               let d5oct = oneStepGiraoDoublings octahedron
-               let d6oct = oneStepGiraoDoublings d5oct
-               mkMma d6oct
+               -- let d5oct = oneStepGiraoDoublings octahedron
+               -- let d6oct = oneStepGiraoDoublings d5oct
+               -- mkMma d6oct
                -- mkMma d5oct
-               -- let drummy = oneStepGiraoDoublings fiveDrum
-               -- mkMma drummy
+               let drummy = oneStepGiraoDoublings fiveDrum
+               mkMma drummy
 
 
 
