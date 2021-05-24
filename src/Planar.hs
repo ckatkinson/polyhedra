@@ -168,6 +168,7 @@ adjacentFaces f pg =  filter
                       (\fa -> length (fvertices fa `intersect` fvertices f) > 1) $
                       delete f $
                       nub $ concat [findFacesAtV v pg | v <- fvertices f]
+                      --Is this slow AF? Probably?
 
 -- | Returns as set of all faces adjacent to f in pg
 adjacentFacesSet :: Face -> Graph -> S.Set Face
